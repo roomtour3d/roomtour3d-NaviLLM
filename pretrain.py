@@ -181,7 +181,7 @@ def val_one_epoch(
                     loss_str += '\n[Eval] ||| %s: %.2f' % (metric, val)
                 else:
                     loss_str += ', %s: %.2f' % (metric, val)
-                wandb.log({f"{name}-{metric}": val}, step=(epoch+1)*args.num_steps_per_epoch-1) 
+                wandb.log({f"{name}-{metric}": val}, step=epoch*args.num_steps_per_epoch) 
         
         if args.rank== 0 and args.save_pred_results:
             dataset.save_json(
@@ -253,7 +253,7 @@ def main():
     # Initialize val dataloader
     val_dataloaders, val_agents = create_dataloaders(
         args, global_cfg, logger,
-        training=False, device=device_id, feat_db=feat_db, obj_feat_db=obj_feat_db, stage="multi"
+        training=False, device=device_id, feat_db=feat_db, obj_feat_db=obj_feat_db, stage=args.stage
     )
 
     # Model
@@ -278,21 +278,22 @@ def main():
                 args, global_cfg, model, optimizer, lr_scheduler, criterion, train_dataloaders, train_agents, epoch, logger, stage=args.stage
             )
 
-            # evaluation
-            results = val_one_epoch(
-                args, global_cfg, model, optimizer, criterion, val_dataloaders, val_agents, epoch, logger
-            )
+            # # evaluation
+            # results = val_one_epoch(
+            #     args, global_cfg, model, optimizer, criterion, val_dataloaders, val_agents, epoch, logger
+            # )
 
             if args.rank==0:
-                score = calc_overall_score(results, global_cfg)
+                # score = calc_overall_score(results, global_cfg)
+                score = 0.
                 history_scores.append(score)
                 should_save_checkpoint = False
                 wandb.log({"epoch": epoch, f"overall_score": score}, step=epoch*args.num_steps_per_epoch) 
 
-                if best_results is None or score > best_score:
-                    best_results = results
-                    best_score = score
-                    should_save_checkpoint = args.max_saved_checkpoints > 0
+                # if best_results is None or score > best_score:
+                #     best_results = results
+                #     best_score = score
+                #     should_save_checkpoint = args.max_saved_checkpoints > 0
                 
                 logger.info(f"Current Score: {score}")
                 logger.info(f"Best Score: {best_score}")
@@ -310,22 +311,22 @@ def main():
                                 logger.info(f"Remove Checkpoint at Epoch {remove_epoch}...")
 
                         model_path = Path(args.output_dir) / f"epoch_{epoch}.pt"
-                        save_checkpoint(model, model_path)
+                        save_checkpoint(model, model_path)#, save_states=True)
               
                 elif args.stage=='pretrain' and (epoch+1)%args.save_ckpt_per_epochs==0:
                     model_path = Path(args.output_dir) / f"pretrain_{epoch}.pt"
-                    save_checkpoint(model, model_path)
+                    save_checkpoint(model, model_path)#, save_states=True)
 
               
-            if args.save_latest_states:
-                # Save the latest if args.save_latest_states is True
-                model_path = Path(args.output_dir) / f"latest.pt"
-                save_checkpoint(model, model_path, optimizer, epoch, save_states=True)
-        
-        # print best results
-        if args.rank == 0:
-            logger.info(f"Best Results:")
-            logger.info(best_results)
+                if args.save_latest_states:
+                    # Save the latest if args.save_latest_states is True
+                    model_path = Path(args.output_dir) / f"latest.pt"
+                    save_checkpoint(model, model_path, optimizer, epoch, save_states=True)
+            
+        # # print best results
+        # if args.rank == 0:
+        #     logger.info(f"Best Results:")
+        #     logger.info(best_results)
 
 if __name__ == '__main__':
     main()
