@@ -8,7 +8,7 @@ Feature:
   feature_database:
     "mp3d": "eva_features/mp3d_EVA02-CLIP-L-14-336.hdf5"
     "scan_qa": "eva_features/scanqa_EVA02-CLIP-L-14-336.hdf5"
-    "room_tour": "eva_features/web_obj_prog_p1_EVA02-CLIP-L-14-336.hdf5.bak"
+    "room_tour": "eva_features/web_obj_prog_p1_EVA02-CLIP-L-14-336.hdf5"
     "coco": "eva_features/coco_EVA02-CLIP-L-14-336.hdf5"
 
   # object
@@ -100,8 +100,8 @@ Pretrain:
 
 
 Multi:
-  SOURCE: ['R2R', 'REVERIE', 'CVDN','SOON', 'ScanQA', 'LLaVA']
-  Ratio: [20, 5, 1, 5, 5, 5]
+  SOURCE: ['RoomTour', 'R2R', 'REVERIE', 'CVDN','SOON', 'ScanQA', 'LLaVA']
+  Ratio: [20, 20, 5, 1, 5, 5, 5]
   LOSS_COEF: {
   }
 

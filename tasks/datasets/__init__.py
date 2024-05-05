@@ -10,6 +10,7 @@ from .r2r_aug import R2RAugDataset
 from .reverie_aug import REVERIEAugDataset
 from .llava import LLaVADataset
 from .scanqa import ScanQADataset
+from .roomtour import RoomTourDataset
 
 def load_dataset(name, *args, **kwargs):
     cls = MetaDataset.registry[name]

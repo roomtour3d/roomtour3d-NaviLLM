@@ -694,6 +694,7 @@ class MP3DAgent(BaseAgent):
                         # update unvisited nodes
                         for j, i_cand_vp in enumerate(pano_inputs['cand_vpids'][i]):
                             if not gmap.graph.visited(i_cand_vp):
+                                # MF: i,j seems not relate to i_cand_vp [mod: the pano_embeds = cat[cand, none_cand]]
                                 update_pano_embeds = pano_embeds[i, j].detach()
                                 gmap.update_node_embed(i_cand_vp, update_pano_embeds)
 

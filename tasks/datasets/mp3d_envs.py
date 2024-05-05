@@ -62,7 +62,10 @@ def get_point_angle_feature(sim, angle_feat_size, baseViewId=0):
     return feature
 
 
-def get_all_point_angle_feature(sim, angle_feat_size):
+def get_all_point_angle_feature(sim, angle_feat_size, connectivity_dir=None):
+    if sim is None:
+        assert connectivity_dir is not None
+        sim = new_simulator(connectivity_dir)
     return [get_point_angle_feature(sim, angle_feat_size, baseViewId) for baseViewId in range(36)]
 
 

@@ -7,6 +7,7 @@ from .cvdn import CVDNAgent
 from .soon import SOONAgent
 from .scanqa import ScanQAAgent
 from .llava import LLaVAAgent
+from .roomtour import RoomTourAgent
 
 
 def load_agent(name, *args, **kwargs):

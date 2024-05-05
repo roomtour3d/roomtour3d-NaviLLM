@@ -8,14 +8,14 @@ Feature:
   feature_database:
     "mp3d": "eva_features/mp3d_EVA02-CLIP-L-14-336.hdf5"
     "scan_qa": "eva_features/scanqa_EVA02-CLIP-L-14-336.hdf5"
-    "room_tour": "eva_features/web_obj_prog_p1_EVA02-CLIP-L-14-336.hdf5.bak"
+    "room_tour": "eva_features/web_obj_prog_p1_EVA02-CLIP-L-14-336.hdf5"
     "coco": "eva_features/coco_EVA02-CLIP-L-14-336.hdf5"
 
   # object
   obj_feat_size: 768
   object_database:
-    "reverie": "obj_features/reverie_obj_feat"
-    "soon": "obj_features/soon_obj_feat"
+    "reverie": "obj_features/reverie_obj_feat/"
+    "soon": "obj_features/soon_obj_feat/"
 
 # task
 Dataset:
@@ -63,7 +63,11 @@ Dataset:
   RoomTour:
     DIR: "RoomTour"
     SPLIT: {
+      # "train": "p1_train_reformat_wroomloc_wtemporal_wspatial.json"
+      # "train": "p1_train_reformat_wroomloc_wtemporal.json"
+      # "train": "p1_train_reformat_wroomloc.json"
       "train": "p1_train_reformat.json"
+      # "train": "p1_wroom_train_reformat_v2.json"
     }
   EQA:
     DIR: "EQA_MP3D"
@@ -91,8 +95,16 @@ Dataset:
 
 # training
 Pretrain:
-  SOURCE: ['R2R_AUG', 'REVERIE_AUG', 'R2R', 'REVERIE', 'SOON', 'CVDN', 'ScanQA']
-  Ratio: [20, 2, 1, 1, 1, 1, 1]
+  # SOURCE: ['R2R_AUG', 'REVERIE_AUG', 'R2R', 'REVERIE', 'SOON', 'CVDN', 'ScanQA']
+  SOURCE: ['R2R_AUG', 'REVERIE_AUG', 'RoomTour', 'R2R', 'REVERIE', 'SOON', 'CVDN', 'ScanQA']
+  # SOURCE: ['RoomTour']
+  # SOURCE: ['R2R_AUG', 'REVERIE_AUG', 'R2R', 'REVERIE', 'SOON', 'CVDN', 'ScanQA']
+  # SOURCE: ['RoomTour', 'R2R', 'REVERIE', 'SOON', 'CVDN', 'ScanQA']
+  # SOURCE: ['ScanQA', 'RoomTour']
+  Ratio: [20, 2, 20, 1, 1, 1, 1, 1]
+  # Ratio: [20]
+  # Ratio: [20, 2, 1, 1, 1, 1, 1]
+  # Ratio: [1, 1]
   LOSS_COEF: {
     "R2R_AUG": 1,
     "REVERIE_AUG": 1

@@ -1,6 +1,7 @@
 import os
 import torch
 import glob
+import torch.distributed as dist
 from transformers import get_constant_schedule_with_warmup
 
 
@@ -26,7 +27,16 @@ def check_checkpoint(args, model, optimizer, lr_scheduler, logger) -> int:
         if 'epoch' in checkpoint:
             resume_from_epoch = checkpoint['epoch'] + 1
             logger.info("Resume from Epoch {}".format(resume_from_epoch))
-            optimizer.load_state_dict(checkpoint['optimizer'])
+            # optimizer.load_state_dict(checkpoint['optimizer'])
+
+            # Move optimizer state to the correct device
+            optimizer_state = checkpoint['optimizer']
+            for state in optimizer_state['state'].values():
+                for k, v in state.items():
+                    if isinstance(v, torch.Tensor):
+                        state[k] = v.to(f'cuda:{args.local_rank}')  # args.device should be set to the actual device, e.g., 'cuda:0'
+
+            optimizer.load_state_dict(optimizer_state)
 
 
     return resume_from_epoch
@@ -36,7 +46,9 @@ def dist_models(args, model, logger):
     logger.info("*************** init model *************** ")
     # args.rank: global rank.
     total_gpus = torch.cuda.device_count()
-    device_id = args.rank % total_gpus
+    # device_id = args.rank % total_gpus
+    device_id = args.gpu
+    assert args.gpu == args.local_rank
 
     model.to(device_id)
     
@@ -51,6 +63,7 @@ def dist_models(args, model, logger):
     logger.info("model initialized with {:.2f} M trainable parameters".format(param_sums/1000**2))
     if args.distributed:
         from torch.nn.parallel import DistributedDataParallel as DDP
+        dist.barrier()
         model = DDP(model, device_ids=[device_id], find_unused_parameters=True)
 
         # args.batch_size: BATCH_SIZE_PER_GPU

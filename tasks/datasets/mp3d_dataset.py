@@ -55,10 +55,10 @@ class MP3DDataset(BaseDataset):
         self.buffered_state_dict = {}
 
         # simulator
-        self.sim = new_simulator(self.connectivity_dir)
+        self.sim = None
 
         # angle features
-        self.angle_feature = get_all_point_angle_feature(self.sim, self.angle_feat_size)
+        self.angle_feature = get_all_point_angle_feature(self.sim, self.angle_feat_size, self.connectivity_dir)
 
         # navigation graph
         self._load_nav_graphs()
@@ -245,6 +245,8 @@ class MP3DDataset(BaseDataset):
         return obs
 
     def make_candidate(self, feature, scanId, viewpointId, viewId):
+        if self.sim is None:
+            self.sim = new_simulator(self.connectivity_dir)
         def _loc_distance(loc):
             return np.sqrt(loc.rel_heading ** 2 + loc.rel_elevation ** 2)
         base_heading = (viewId % 12) * math.radians(30)

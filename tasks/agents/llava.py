@@ -25,7 +25,7 @@ class LLaVAAgent(BaseAgent):
         model,
         **kwargs
     ):
-        assert name in ["ScanQA", "LLaVA"], 'The task name must be in [ScanQA, LLaVA]'
+        assert name in ["RoomTour", "ScanQA", "LLaVA"], 'The task name must be in [RoomTour, ScanQA, LLaVA]'
         dataset_cfg = config.Pretrain if args.stage=='pretrain' else config.Multi
         loss_coef = dataset_cfg.LOSS_COEF.get(name, 1.)
         # construct prompt

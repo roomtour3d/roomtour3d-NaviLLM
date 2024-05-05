@@ -10,6 +10,10 @@ from pathlib import Path
 from .image_embedding import ImageEmbeddings
 from .modified_lm import ModifiedOPTForCasualLM, ModifiedLlamaForCausalLM, TrieLogitsProcessor
 from typing import Dict, List, Any
+try:
+    from peft import get_peft_model, LoraConfig, TaskType
+except:
+    get_peft_model, LoraConfig, TaskType = None, None, None
 
 logging.set_verbosity_error()
 
@@ -28,6 +32,20 @@ def init_vis_config(args, config):
     vis_config.type_vocab_size = 3
     return vis_config
 
+# def init_vis_config():
+#     cfg_name = 'bert-large-uncased'
+#     vis_config = PretrainedConfig.from_pretrained(cfg_name)
+#     vis_config.num_pano_layers = 2
+#     vis_config.precision = "amp_bf16"
+#     vis_config.pretrained_model_name_or_path = "/home/tiger/VLN/models/Vicuna-7B"
+#     vis_config.max_action_steps = 100
+#     vis_config.image_feat_size = 1024
+#     vis_config.angle_feat_size = 4
+#     vis_config.obj_feat_size = 768
+#     vis_config.obj_loc_size = 3
+#     vis_config.type_vocab_size = 3
+#     return vis_config
+
 
 class NavModel(nn.Module):
     def __init__(self, args, logger, model_config):
@@ -35,6 +53,8 @@ class NavModel(nn.Module):
         self.args = args
         config = init_vis_config(args, model_config)
         self.config = config
+
+        self.no_loc_fts = args.no_loc_fts
 
         # Large Language Model
         if args.resume_from_checkpoint is not None or args.from_scratch:
@@ -45,9 +65,31 @@ class NavModel(nn.Module):
         else:
             self.lang_model = ModifiedOPTForCasualLM.from_pretrained(config.pretrained_model_name_or_path, config) if "opt" in config.pretrained_model_name_or_path \
                 else ModifiedLlamaForCausalLM.from_pretrained(config.pretrained_model_name_or_path, config)
-        
+
         self.lang_model.init_tokenizer(config.pretrained_model_name_or_path)
 
+        if self.args.freeze_llama:
+            for name, param in self.lang_model.model.named_parameters():
+                param.requires_grad = False
+            if self.args.tune_token_emb:
+                for name, param in self.lang_model.get_input_embeddings().named_parameters():
+                    param.requires_grad = True
+
+        if self.args.use_lora:
+            logger.info("Use lora")
+            peft_config = LoraConfig(
+                task_type=TaskType.CAUSAL_LM, inference_mode=False, 
+                r=self.args.lora_rank, lora_alpha=self.args.lora_alpha, lora_dropout=self.args.lora_dropout,
+                target_modules=self.args.lora_target,
+            )
+            self.lang_model = get_peft_model(self.lang_model, peft_config)
+            if self.args.tune_token_emb:
+                for name, param in self.lang_model.get_input_embeddings().named_parameters():
+                    param.requires_grad = True
+                for name, param in self.lang_model.base_model.lm_head.named_parameters():
+                    param.requires_grad = True
+            self.lang_model.print_trainable_parameters()
+            
         self.hidden_size = self.lang_model.hidden_size
         self.model_type = self.lang_model.model_type
 
@@ -56,19 +98,20 @@ class NavModel(nn.Module):
         self.img_embeddings = ImageEmbeddings(config, use_obj=args.enable_og, fuse_obj=args.fuse_obj)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, self.hidden_size)
 
-        # global encoding
+        # global encoding, sum/nav-task
         self.gmap_pos_embeddings = nn.Sequential(
             nn.Linear(config.angle_feat_size + 3, self.hidden_size),
             nn.LayerNorm(self.hidden_size, eps=1e-12)
         )
         self.gmap_step_embeddings = nn.Embedding(config.max_action_steps, self.hidden_size)
 
-        # local encoding
+        # local encoding, nav/3dqa/sum-task
         self.vp_pos_embeddings = nn.Sequential(
             nn.Linear(config.angle_feat_size * 2 + 6, self.hidden_size),
             nn.LayerNorm(self.hidden_size, eps=1e-12)
         )
 
+        # objgrounding-task
         self.obj_pos_embeddings = nn.Sequential(
             nn.Linear(config.angle_feat_size + 3, self.hidden_size),
             nn.LayerNorm(self.hidden_size, eps=1e-12)
@@ -77,9 +120,9 @@ class NavModel(nn.Module):
         if self.config.obj_feat_size > 0:
             self.og_head = nn.Sequential(
                 nn.Linear(self.hidden_size, 100)
-            ).to(self.lang_model.model_type) 
+            ).to(self.lang_model.model_type)
 
-        # Classfification from candidates
+        # Classfification from candidates, nav/objgrounding-task
         self.out_head = nn.Sequential(
             nn.Linear(self.hidden_size, 100)
         ).to(self.lang_model.model_type)
@@ -91,7 +134,11 @@ class NavModel(nn.Module):
         self.drop_env = nn.Dropout(p=args.feat_dropout)
 
         logger.info("model type: {}".format(self.model_type))
-
+        trainable_params = []
+        for name, param in self.named_parameters():
+            if param.requires_grad:
+                trainable_params.append(name)
+        logger.info("Trainable params: {}".format(','.join(trainable_params)))
 
     def forward(self, mode: str, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         batch = collections.defaultdict(lambda: None, batch)
@@ -103,7 +150,7 @@ class NavModel(nn.Module):
             return self.img_embeddings.forward_panorama_per_step(
                 batch['view_img_fts'],
                 batch['view_lens'],
-                batch['loc_fts'],
+                None if self.no_loc_fts else batch['loc_fts'],
                 batch['nav_types'],
                 batch['obj_img_fts'],
                 batch['obj_lens'],
@@ -392,6 +439,8 @@ class NavModel(nn.Module):
             ).tolist()
 
             generate_ids = [s[text_input["input_ids"].shape[1]:] for i, s in enumerate(generate_ids)]
+            # print(generate_ids)
+            # generate_ids = [[self.lang_model.tokenizer.pad_token_id if gid == -1 else gid for gid in gids] for gids in generate_ids]
             generated_sentences = self.lang_model.tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
             outputs = {
                 "generated_sentences": generated_sentences

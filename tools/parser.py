@@ -50,6 +50,7 @@ def read_args():
     parser.add_argument("--workers", type=int, default=0)
 
     # distributed training args
+    parser.add_argument('--gpu', type=int, default=0, help='current gpu id, local rank')
     parser.add_argument('--world_size', type=int, default=0, help='number of gpus')
     parser.add_argument('--local_rank', type=int, default=-1)
     parser.add_argument(
@@ -93,6 +94,17 @@ def read_args():
     parser.add_argument("--obj_loss_coef", type=float, default=1.)
     parser.add_argument("--teacher_forcing_coef", type=float, default=1.)
     parser.add_argument("--fuse_obj", action="store_true", help="whether fuse object features for REVERIE and SOON")
+    parser.add_argument("--use_lora", action="store_true", help="whether using lora")
+    parser.add_argument("--lora_rank", type=int, default=8, help="lora rank")
+    parser.add_argument("--lora_alpha", type=int, default=16, help="lora alpha, usually starting from two times of rank")
+    parser.add_argument("--lora_dropout", type=float, default=0.05, help="lora dropout")
+    parser.add_argument('--lora_target', type=str, default=None, nargs='+')
+    parser.add_argument("--freeze_llama", action="store_true", help="whether freezing llama")
+    parser.add_argument("--tune_token_emb", action="store_true", help="whether tuning token embedding")
+
+
+    # room tour
+    parser.add_argument("--no_loc_fts", action="store_true", help="no loc fts during nav")
 
     # datasets
     parser.add_argument("--multi_endpoints", type=int, default=1)

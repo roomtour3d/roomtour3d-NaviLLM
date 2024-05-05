@@ -36,6 +36,8 @@ def create_dataloaders(args, config, logger, training, device, feat_db=None, obj
             task_feat_db = feat_db['scan_qa']
         elif task_name in ["LLaVA"]:
             task_feat_db = feat_db["coco"]
+        elif task_name in ["RoomTour"]:
+            task_feat_db = feat_db["room_tour"]
         else:
             raise NotImplementedError
         

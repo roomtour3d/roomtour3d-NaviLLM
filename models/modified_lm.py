@@ -44,6 +44,9 @@ class ModifiedLM:
         else:
             self.model_type = torch.float32
 
+        if hasattr(extra_config, "use_mm_proj") and extra_config.use_mm_proj:
+            self.mm_projector = nn.Linear(config.mm_hidden_size, config.hidden_size)
+
         self.model = self.model.to(self.model_type)
         self.lm_head = self.lm_head.to(self.model_type)
 
@@ -109,6 +112,9 @@ class ModifiedLM:
         if obj_locations.sum() != 0:
             inputs_embeds[obj_locations] += obj_vis
 
+        if 'inputs_embeds' in kwargs:
+            # print(kwargs.keys())
+            _ = kwargs.pop('inputs_embeds')
         outputs = self.get_encoder()(
             attention_mask=attention_mask,
             inputs_embeds=inputs_embeds,
