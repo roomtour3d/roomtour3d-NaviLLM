@@ -287,7 +287,7 @@ def main():
                 score = calc_overall_score(results, global_cfg)
                 history_scores.append(score)
                 should_save_checkpoint = False
-                wandb.log({"epoch": epoch, f"overall_score": score}, step=epoch*args.num_steps_per_epoch) 
+                wandb.log({"epoch": epoch, f"overall_score": score}, step=(epoch+1)*args.num_steps_per_epoch-1) 
 
                 if best_results is None or score > best_score:
                     best_results = results

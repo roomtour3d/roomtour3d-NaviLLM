@@ -1,8 +1,36 @@
 from .llava import LLaVAAgent
-
+import math
+import numpy as np
+import torch
+from tqdm import tqdm
+from torch.nn.utils.rnn import pad_sequence
+from models.ops import pad_tensors_wgrad
+from collections import defaultdict
+from contextlib import nullcontext
+from models.graph_utils import GraphMap
+from typing import List
+from models.graph_utils import calculate_vp_rel_pos_fts, get_angle_fts
 
 class RoomTourAgent(LLaVAAgent):
     name = "roomtour"
+
+    # def __init__(self, args=None, shortest_distances=None, shortest_paths=None):
+    #     self.args = args
+    #     self.shortest_paths = shortest_paths
+    #     self.shortest_distances = shortest_distances
+    #     # buffer
+    #     self.scanvp_cands = {}
+
+    def update_scanvp_cands(self, obs):
+        for ob in obs:
+            scan = ob['scan']
+            vp = ob['viewpoint']
+            scanvp = '%s_%s' % (scan, vp)
+            self.scanvp_cands.setdefault(scanvp, {})
+            for cand in ob['candidate']:
+                self.scanvp_cands[scanvp].setdefault(cand['viewpointId'], {})
+                self.scanvp_cands[scanvp][cand['viewpointId']] = cand['pointId']
+
 
     def get_prompt(self, task, *args, **kwargs):
         if task == 'video_desc':
@@ -59,6 +87,11 @@ class RoomTourAgent(LLaVAAgent):
         args,
         config,
         model,
+        criterion=None,
+        dataset=None,
+        step=0,
+        entropy_metric=None,
+        instr_pred_metric=None,
         **kwargs
     ):
         assert name in ["RoomTour", "ScanQA", "LLaVA"], 'The task name must be in [RoomTour, ScanQA, LLaVA]'

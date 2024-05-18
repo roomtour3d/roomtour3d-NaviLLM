@@ -11,6 +11,7 @@ from .reverie_aug import REVERIEAugDataset
 from .llava import LLaVADataset
 from .scanqa import ScanQADataset
 from .roomtour import RoomTourDataset
+from .tour3d_dataset import Tour3DDataset
 
 def load_dataset(name, *args, **kwargs):
     cls = MetaDataset.registry[name]
