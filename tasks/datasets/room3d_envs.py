@@ -196,48 +196,6 @@ class VideoSim:
                                                     'trajectoryId': trajectoryId, 
                                                     'colmapId': colmapId})
 
-        # # try:
-        # #     all_video_entries = pkl.load(open('/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/video_sim_all_plain_next_view_only_p1_online_cache.pkl', 'rb'))
-        # # except:
-        # final_annos = pkl.load(open(f'/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/video_sim_all_plain_next_view_only_p1.pkl', 'rb'))
-        # all_video_entries = {}
-        # all_distance_angles = {}
-        # last_videoId = None
-        # last_video_frames = None
-        # print("Creating video sim ...")
-        # # for i, file in enumerate(all_videos):
-        # for vid in final_annos:
-        #     # vid = os.path.basename(file).replace('.json', '')
-        #     # vid_distance_angles = pkl.load(open("/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/geoinformation_colmap_degree_and_distance_p1/{}.pkl", 'rb'))
-            
-        #     current_video_entries = {}
-        #     # for entry in json.load(open(file)):
-        #     for entry in final_annos[vid]:
-        #         curViewId = entry["curViewId"]
-        #         if curViewId == 'bxbeU0IGTBw_output_frame_0387.png':
-        #             print("debug")
-        #         curFrameId = entry["curFrameId"]
-        #         videoId = entry["videoId"]
-        #         nextViewId = entry["nextViewId"]
-        #         nextViewIndex = entry["nextViewIndex"]
-        #         nextFrameIds = entry["nextFrameIds"]
-        #         colmapId = entry['scene']
-        #         trajectoryId = entry['trajectoryId']
-        #         # candidates = entry["candidates"]
-
-        #         # all_fids = entry["history"]+entry["cur"]+entry["nextId"]+entry["future"]
-        #         #TODO: curIds should restore longids
-        #         # for fid in entry['nextViewId']:
-        #         current_video_entries.setdefault(trajectoryId, {}).setdefault(curViewId, {}).update({curViewId: {'nextViewId': nextViewId, 
-        #                                             'curFrameId': curFrameId,
-        #                                             'nextViewIndex': nextViewIndex,
-        #                                             'nextFrameIds': nextFrameIds,
-        #                                             'nav': entry['navigable'],
-        #                                             'trajectoryId': trajectoryId, 
-        #                                             'colmapId': entry['scene']}})
-
-        #     all_video_entries[vid] = current_video_entries
-        
         self.init_cached_sim()
         self.all_video_entries = all_video_entries
 
@@ -246,7 +204,7 @@ class VideoSim:
         if self.cached_vid_sim is None:
             print("Loaing sim cache ...")
             # self.cached_vid_sim = pkl.load(open('/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/geoinformation_colmap_p1/geo_trajectory.pkl', 'rb'))
-            self.cached_vid_sim = pkl.load(open('/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/geoinformation_colmap_p1/geo_bak/geo_trajectory.pkl', 'rb'))
+            self.cached_vid_sim = pkl.load(open('data/RoomTour/geo_trajectory.pkl', 'rb'))
         
     def get_loc(self, colmapId, frameId):
         return self.cached_vid_sim[colmapId][frameId]['pos'] 
@@ -361,8 +319,8 @@ class VideoSim:
 
 
 #TODO: fake a simulator for room tour videos
-def construct_fake_simulator(connectivity_dir, anno_file):
-    return VideoSim(connectivity_dir, anno_file)
+def construct_fake_simulator(anno_file):
+    return VideoSim(anno_file)
 
 def angle_feature(heading, elevation, angle_feat_size):
     return np.array(
@@ -429,7 +387,7 @@ def load_nav_graphs(anno_file):
 
     graphs = {}
     # cached_vid_sim = pkl.load(open('/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/geoinformation_colmap_p1/geo_trajectory.pkl', 'rb'))
-    cached_vid_sim = pkl.load(open('/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/geoinformation_colmap_p1/geo_bak/geo_trajectory.pkl', 'rb'))
+    cached_vid_sim = pkl.load(open('data/RoomTour/geo_trajectory.pkl', 'rb'))
     all_annos = json.load(open(anno_file))
 
     all_video_entries = {}
@@ -502,7 +460,7 @@ def convert_elevation(x):
 
 
 class EnvBatch(object):
-    def __init__(self, connectivity_dir, feat_db=None, anno_file=None, batch_size=1):
+    def __init__(self, feat_db=None, anno_file=None, batch_size=1):
         self.feat_db = feat_db
         self.image_w = 640
         self.image_h = 480
@@ -510,7 +468,7 @@ class EnvBatch(object):
         self.sims = []
         for i in range(batch_size):
             # print("Creating fake simulator")
-            sim = construct_fake_simulator(connectivity_dir, anno_file)
+            sim = construct_fake_simulator(anno_file)
             self.sims.append(sim)
 
     def newEpisodes(self, scanIds, viewpointIds, trajectoryIds, headings):

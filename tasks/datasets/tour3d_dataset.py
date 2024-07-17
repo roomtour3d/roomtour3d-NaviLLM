@@ -94,7 +94,7 @@ class Tour3DDataset(BaseDataset):
         self.buffered_state_dict = {}
 
         # simulator
-        self.sim = VideoSim('/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/geoinformation_colmap_built_video_sim_all_plain_next_view_only_p1/', self.anno_file)
+        self.sim = VideoSim(self.anno_file)
 
         # angle features
         # self.angle_feature = get_all_point_angle_feature(self.sim, self.angle_feat_size, self.connectivity_dir)
@@ -246,7 +246,7 @@ class Tour3DDataset(BaseDataset):
         trajectory_ids = [item['trajectoryId']]
 
         # if self.env_cache is None:
-        env = EnvBatch(connectivity_dir='/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/geoinformation_colmap_built_video_sim_all_plain_next_view_only_p1/', batch_size=1, anno_file=self.anno_file)
+        env = EnvBatch(batch_size=1, anno_file=self.anno_file)
             # self.env_cache = copy.deepcopy(env)
         # else:
         #     env = copy.deepcopy(self.env_cache)
