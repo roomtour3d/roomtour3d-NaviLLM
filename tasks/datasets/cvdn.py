@@ -1,5 +1,6 @@
 import json
 import copy
+import random
 import numpy as np
 from .mp3d_dataset import MP3DDataset
 from collections import defaultdict
@@ -36,7 +37,7 @@ class CVDNDataset(MP3DDataset):
                         goal_vp = end_vp
                 item['path'] = self.shortest_paths[item['scan']][item['start_pano']['pano']][goal_vp]
 
-    def load_data(self, anno_file, debug=False, path_type='trusted_path'):
+    def load_data(self, anno_file, debug=False, path_type='trusted_path', few_shot=None):
         with open(str(anno_file), "r") as f:
             data = json.load(f)
         new_data = []
@@ -83,6 +84,10 @@ class CVDNDataset(MP3DDataset):
             sample_idx += 1
         if debug:
             new_data = new_data[:20]
+        if few_shot is not None and 'train' in str(anno_file):
+            # new_data = new_data[:few_shot]
+            scenes = ['S9hNv5qa7GM', 'i5noydFURQK', '7y3sRwLe3Va', 'b8cTxDM8gDG', 'JeFG25nYj2p', 'r47D5H71a5s', 'cV4RVeZvu5T', '5q7pvUzZiYa', 'HxpKQynjfin', 'EDJbREhghzL']
+            new_data = [d for d in new_data if d['scan'] in scenes[:few_shot+1]]
 
         gt_trajs = {}
         for x in new_data:

@@ -122,7 +122,12 @@ class NavModel(nn.Module):
                 nn.Linear(self.hidden_size, 100)
             ).to(self.lang_model.model_type)
 
-        # Classfification from candidates, nav/objgrounding-task
+        if args.tour3d_nav_head:
+            # Classfification from candidates, nav/objgrounding-task
+            self.tour3d_out_head = nn.Sequential(
+                nn.Linear(self.hidden_size, 100)
+            ).to(self.lang_model.model_type)
+        # else:
         self.out_head = nn.Sequential(
             nn.Linear(self.hidden_size, 100)
         ).to(self.lang_model.model_type)
@@ -281,7 +286,10 @@ class NavModel(nn.Module):
         fuse_logits = torch.zeros((fuse_embeds.shape[0], fuse_embeds.shape[1])).to(
             fuse_embeds.device).to(self.model_type)
         
-        predictions = self.out_head(hidden_states[text_input['input_ids']==self.lang_model.cls_token_id[0]])
+        if self.args.tour3d_nav_head and kwargs.get('is_tour3d', False):
+            predictions = self.tour3d_out_head(hidden_states[text_input['input_ids']==self.lang_model.cls_token_id[0]])
+        else:
+            predictions = self.out_head(hidden_states[text_input['input_ids']==self.lang_model.cls_token_id[0]])
         
         for i in range(batch_size):
             fuse_logits[i][cand_masks[i]] = torch.cat([predictions[i, 0:1],predictions[i, 1:cand_nums[i]][inv_perms[i]]],dim=0)

@@ -1,4 +1,5 @@
 import json
+import random
 import numpy as np
 from .r2r import R2RDataset
 from collections import defaultdict
@@ -7,7 +8,7 @@ from transformers import AutoTokenizer
 class R2RAugDataset(R2RDataset):
     name = "r2r_aug"
 
-    def load_data(self, anno_file, max_instr_len=200, debug=False):
+    def load_data(self, anno_file, max_instr_len=200, debug=False, few_shot=None):
         """
         :param anno_file:
         :param max_instr_len:
@@ -40,6 +41,10 @@ class R2RAugDataset(R2RDataset):
 
         if debug:
             new_data = new_data[:20]
+        if few_shot is not None and 'train' in str(anno_file):
+            # new_data = new_data[:few_shot]
+            scenes = ['S9hNv5qa7GM', 'i5noydFURQK', '7y3sRwLe3Va', 'b8cTxDM8gDG', 'JeFG25nYj2p', 'r47D5H71a5s', 'cV4RVeZvu5T', '5q7pvUzZiYa', 'HxpKQynjfin', 'EDJbREhghzL']
+            new_data = [d for d in new_data if d['scan'] in scenes[:few_shot+1]]
 
         gt_trajs = {
             x['instr_id']: (x['scan'], x['path']) \

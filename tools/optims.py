@@ -17,6 +17,9 @@ def check_checkpoint(args, model, optimizer, lr_scheduler, logger) -> int:
         for key, val in state_disk.items():
             if key in model_state_dict and model_state_dict[key].shape == val.shape:
                 update_model_state[key] = val
+                if args.tour3d_nav_head and '.out_head' in key:
+                    new_key = key.replace('.out_head', '.tour3d_out_head')
+                    update_model_state[new_key] = val
             else:
                 logger.info(
                     'Ignore weight %s: %s' % (key, str(val.shape))
@@ -24,7 +27,7 @@ def check_checkpoint(args, model, optimizer, lr_scheduler, logger) -> int:
         msg = model.load_state_dict(update_model_state, strict=False)
         logger.info(msg)
 
-        if 'epoch' in checkpoint:
+        if 'epoch' in checkpoint and args.stage in ['multi', 'pretrain']:
             resume_from_epoch = checkpoint['epoch'] + 1
             logger.info("Resume from Epoch {}".format(resume_from_epoch))
             # optimizer.load_state_dict(checkpoint['optimizer'])
@@ -63,7 +66,7 @@ def dist_models(args, model, logger):
     logger.info("model initialized with {:.2f} M trainable parameters".format(param_sums/1000**2))
     if args.distributed:
         from torch.nn.parallel import DistributedDataParallel as DDP
-        dist.barrier()
+        # dist.barrier()
         model = DDP(model, device_ids=[device_id], find_unused_parameters=True)
 
         # args.batch_size: BATCH_SIZE_PER_GPU

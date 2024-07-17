@@ -31,6 +31,7 @@ class MP3DDataset(BaseDataset):
         self.logger = logger
         self.training = training
         self.debug = args.debug
+        self.few_shot = args.few_shot
         self.source = source
 
         if self.training:
@@ -79,30 +80,30 @@ class MP3DDataset(BaseDataset):
         msg = ""
         if self.source == "R2R":
             anno_file = get_anno_file_path(data_dir, config.R2R.DIR, config.R2R.SPLIT[self.split])
-            self.data['r2r'], self.gt_trajs = self.load_data(anno_file=anno_file, debug=self.debug)
+            self.data['r2r'], self.gt_trajs = self.load_data(anno_file=anno_file, debug=self.debug, few_shot=self.few_shot)
             msg += '\n- Dataset: load {} R2R samples'.format(len(self.data['r2r']))
         elif self.source == "REVERIE":
             anno_file = get_anno_file_path(data_dir, config.REVERIE.DIR, config.REVERIE.SPLIT[self.split])
             bbox_file = get_anno_file_path(data_dir, config.REVERIE.DIR, config.REVERIE.bbox_file)
             obj2vps = self.load_obj2vps(bbox_file)
-            self.data['reverie'], self.gt_trajs = self.load_data(anno_file=anno_file, obj2vps=obj2vps, debug=self.debug)
+            self.data['reverie'], self.gt_trajs = self.load_data(anno_file=anno_file, obj2vps=obj2vps, debug=self.debug, few_shot=self.few_shot)
             msg += '\n- Dataset: load {} REVERIE samples'.format(len(self.data['reverie']))
         elif self.source == "CVDN":
             anno_file = get_anno_file_path(data_dir, config.CVDN.DIR, config.CVDN.SPLIT[self.split])
-            self.data['cvdn'], self.gt_trajs = self.load_data(anno_file=anno_file, debug=self.debug)
+            self.data['cvdn'], self.gt_trajs = self.load_data(anno_file=anno_file, debug=self.debug, few_shot=self.few_shot)
             msg += '\n- Dataset: load {} CVDN samples'.format(len(self.data['cvdn']))
         elif self.source == "SOON":
             anno_file = get_anno_file_path(data_dir, config.SOON.DIR, config.SOON.SPLIT[self.split])
-            self.data['soon'], self.gt_trajs = self.load_data(anno_file=anno_file, debug=self.debug)
+            self.data['soon'], self.gt_trajs = self.load_data(anno_file=anno_file, debug=self.debug, few_shot=self.few_shot)
             msg += '\n- Dataset: load {} SOON samples'.format(len(self.data['soon']))
         elif self.source == "R2R_AUG":
             anno_file = get_anno_file_path(data_dir, config.R2R_AUG.DIR, config.R2R_AUG.SPLIT[self.split])
-            self.data["r2r_aug"], _ = self.load_data(anno_file=anno_file, debug=self.debug)
+            self.data["r2r_aug"], _ = self.load_data(anno_file=anno_file, debug=self.debug, few_shot=self.few_shot)
         elif self.source == "REVERIE_AUG":
             anno_file = get_anno_file_path(data_dir, config.REVERIE_AUG.DIR, config.REVERIE_AUG.SPLIT[self.split])
             bbox_file = get_anno_file_path(data_dir, config.REVERIE.DIR, config.REVERIE.bbox_file)
             obj2vps = self.load_obj2vps(bbox_file)
-            self.data["reverie_aug"], _ = self.load_data(anno_file=anno_file, obj2vps=obj2vps, debug=self.debug)
+            self.data["reverie_aug"], _ = self.load_data(anno_file=anno_file, obj2vps=obj2vps, debug=self.debug, few_shot=self.few_shot)
         elif self.source == "EQA":
             anno_file = get_anno_file_path(data_dir, config.EQA.DIR, config.EQA.SPLIT[self.split])
             self.data['eqa'], self.gt_trajs = self.load_data(anno_file=anno_file, split=self.split, debug=self.debug)

@@ -39,7 +39,7 @@ def create_dataloaders(args, config, logger, training, device, feat_db=None, obj
         elif task_name in ["RoomTour"]:
             task_feat_db = feat_db["room_tour"]
         elif task_name in ["Tour3D"]:
-            task_feat_db = feat_db["room_tour"]
+            task_feat_db = feat_db["room3d_tour"]
         else:
             raise NotImplementedError
         

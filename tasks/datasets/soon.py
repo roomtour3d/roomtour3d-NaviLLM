@@ -1,5 +1,6 @@
 import json
 import copy
+import random
 import jsonlines
 import numpy as np
 from shapely.geometry import Point
@@ -26,7 +27,7 @@ class SOONDataset(MP3DDataset):
     ):
         super().__init__(args, config, training, logger, source)
     
-    def load_data(self, anno_file, debug=False):
+    def load_data(self, anno_file, debug=False, few_shot=None):
         data = []
         with jsonlines.open(str(anno_file), 'r') as f:
             for item in f:
@@ -59,6 +60,10 @@ class SOONDataset(MP3DDataset):
                 sample_index += 1
         if debug:
             new_data = new_data[:20]
+        if few_shot is not None and 'train' in str(anno_file):
+            # new_data = new_data[:few_shot]
+            scenes = ['S9hNv5qa7GM', 'i5noydFURQK', '7y3sRwLe3Va', 'b8cTxDM8gDG', 'JeFG25nYj2p', 'r47D5H71a5s', 'cV4RVeZvu5T', '5q7pvUzZiYa', 'HxpKQynjfin', 'EDJbREhghzL']
+            new_data = [d for d in new_data if d['scan'] in scenes[:few_shot+1]]
 
         gt_trajs = self._get_gt_trajs(new_data)
         return new_data, gt_trajs

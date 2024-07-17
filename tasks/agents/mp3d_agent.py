@@ -274,11 +274,11 @@ class MP3DAgent(BaseAgent):
 
         batch_vp_pos_fts = []
         for i, gmap in enumerate(gmaps):
-            cur_cand_pos_fts = gmap.get_pos_fts(
+            cur_cand_pos_fts = gmap.get_pos_fts( # current postition
                 obs[i]['viewpoint'], cand_vpids[i],
                 obs[i]['heading'], obs[i]['elevation']
             )
-            cur_start_pos_fts = gmap.get_pos_fts(
+            cur_start_pos_fts = gmap.get_pos_fts( # future directions (cost in di)
                 obs[i]['viewpoint'], [gmap.start_vp],
                 obs[i]['heading'], obs[i]['elevation']
             )
@@ -753,7 +753,7 @@ class MP3DAgent(BaseAgent):
                     ml_loss += cnt_loss.detach()
 
                     ########### Single-Step Backward ###########
-                    if not validate:
+                    if not validate and not args.disable_nav:
                         cnt_loss.backward()
                     cnt_loss = 0.
 
@@ -909,6 +909,8 @@ class MP3DAgent(BaseAgent):
                             traj[i]['generated_sentences'] = generated_sentences[i]
                             traj[i]['answer'] = nav_inputs['answer'][i]
 
+                # if (t < len(ob['gt_path']) - 1) and (a_t_stop[i] or ended[i] or nav_inputs['no_vp_left'][i]):
+                #     print("debug")
                 # Prepare environment action
                 cpu_a_t = []
                 for i in range(batch_size):

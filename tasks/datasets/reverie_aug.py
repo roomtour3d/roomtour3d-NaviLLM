@@ -1,4 +1,5 @@
 import json
+import random
 import numpy as np
 from .reverie import REVERIEDataset
 from collections import defaultdict
@@ -7,9 +8,9 @@ from transformers import AutoTokenizer
 class REVERIEAugDataset(REVERIEDataset):
     name = "reverie_aug"
 
-    def load_data(self, anno_file, obj2vps, debug=False):
+    def load_data(self, anno_file, obj2vps, debug=False, few_shot=None):
         if str(anno_file).endswith("json"):
-            return super().load_data(anno_file, obj2vps, debug=debug)
+            return super().load_data(anno_file, obj2vps, debug=debug, few_shot=few_shot)
         
         with open(str(anno_file), "r") as f:
             data = []
@@ -38,6 +39,10 @@ class REVERIEAugDataset(REVERIEDataset):
 
         if debug:
             new_data = new_data[:20]
+        if few_shot is not None and 'speaker_aug' in str(anno_file):
+            # new_data = new_data[:few_shot]
+            scenes = ['S9hNv5qa7GM', 'i5noydFURQK', '7y3sRwLe3Va', 'b8cTxDM8gDG', 'JeFG25nYj2p', 'r47D5H71a5s', 'cV4RVeZvu5T', '5q7pvUzZiYa', 'HxpKQynjfin', 'EDJbREhghzL']
+            new_data = [d for d in new_data if d['scan'] in scenes[:few_shot+1]]
 
         gt_trajs = {
             x['instr_id']: (x['scan'], x['path'], x['objId']) \

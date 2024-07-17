@@ -5,7 +5,6 @@ from tqdm import tqdm
 from torch.nn.utils.rnn import pad_sequence
 from models.ops import pad_tensors_wgrad
 from models.graph_utils import calculate_vp_rel_pos_fts, get_angle_fts
-# from models.colmap_utils import calculate_vp_rel_pos_fts, get_angle_fts
 from .base_agent import BaseAgent
 
 import numpy as np
@@ -14,22 +13,6 @@ from collections import defaultdict
 from contextlib import nullcontext
 from models.graph_utils import GraphMap
 from typing import List
-
-import time
-from torch import distributed as dist
-
-
-def sync_all(rank, world_size, msg, timeout=60):
-    start_time = time.time()
-    if dist.is_initialized():
-        dist.barrier()
-        while time.time() - start_time < timeout:
-            try:
-                dist.barrier()
-                break
-            except RuntimeError:
-                print(f"Rank {rank}: Barrier timeout - {msg}")
-                break
 
 def pad_tensors(tensors, lens=None, pad=0):
     """B x [T, ...]"""
@@ -94,62 +77,13 @@ def get_results(pred_results, detailed_output=False):
     return pred_output
 
 
-class Tour3DAgent(BaseAgent):
-    name = 'tour3d'
-
+class MP3DAgent(BaseAgent):
     def __init__(self, args, shortest_distances, shortest_paths):
         self.args = args
         self.shortest_paths = shortest_paths
         self.shortest_distances = shortest_distances
         # buffer
         self.scanvp_cands = {}
-        self.no_loc_fts = args.no_loc_fts
-
-
-    def get_prompt(self, task, *args, **kwargs):
-        if task == 'navigation':
-            return self.get_navigation_prompt(*args, **kwargs)
-        elif task == 'summarization':
-            return self.get_summarization_prompt(*args, **kwargs)
-        elif task == 'embodied_qa':
-            return self.get_embodied_qa_prompt(*args, **kwargs)
-        else:
-            raise NotImplementedError
-
-    def get_navigation_prompt(self, instruction, hist_num, cand_num, cls_token):
-        # Task
-        prompt = '### Instruction: Navigate following the instruction. {} \n'.format(instruction)
-        # History
-        prompt += 'Following is the History, which contains the visual information of your previous decisions.\n'
-        hist_text = ' '.join(['({}) <hist>'.format(i) for i in range(hist_num)])
-        prompt += '### History: {}\n'.format(hist_text)
-        # Observation
-        prompt += 'Following is the Candidate, which contains several directions you can go to at the current position, candidate (0) is stop.\n'
-        obs_text = ' '.join(['({}) <cand>'.format(i) if i>0 else '(0) stop' for i in range(cand_num)])
-        prompt += '### Candidate: {}\n'.format(obs_text)
-        # Output Hint
-        prompt += 'Compare the History and Instruction to infer your current progress, and then select the correct direction from the candidates to go to the target location.\n'
-        prompt += '### Output: {}'.format(cls_token)
-
-        return prompt
-        
-    def get_summarization_prompt(self, instruction, hist_num, cand_num):
-        # Task
-        prompt = f'### Instruction: Predict the fine-grained instruction based on your previous history and current location. Fine-grained instructions contain commands for each individual step. \n'
-        # History
-        prompt += 'Following is the History, which contains the visual information of your previous decisions.\n'
-        hist_text = ' '.join(['({}) <hist>'.format(i) for i in range(hist_num)])
-        prompt += '### History: {}\n'.format(hist_text)
-        # Observation
-        if cand_num != 0:
-            prompt += 'Following is the Observation, which contains the current view at your current location.\n'
-            obs_text = ' '.join(['({}) <cand>'.format(i) for i in range(cand_num)])
-            prompt += '### Candidate: {}\n'.format(obs_text)
-        # Output Hint
-        prompt += 'Please generate the step-by-step instruction, containing rooms visited, objects appearing and disappearing from the view.\n'
-        prompt += '### Answer: '
-
-        return prompt
 
     def update_scanvp_cands(self, obs):
         for ob in obs:
@@ -181,7 +115,7 @@ class Tour3DAgent(BaseAgent):
                                  in enumerate(ob['feature']) if k not in used_viewidxs])
             view_ang_fts.extend([x[self.args.image_feat_size:] for k, x \
                                  in enumerate(ob['feature']) if k not in used_viewidxs])
-            nav_types.extend([0] * (len(ob['feature']) - len(used_viewidxs)))
+            nav_types.extend([0] * (36 - len(used_viewidxs)))
             # combine cand views and noncand views
             view_img_fts = np.stack(view_img_fts, 0)  # (n_views, dim_ft)
             view_ang_fts = np.stack(view_ang_fts, 0)
@@ -225,12 +159,11 @@ class Tour3DAgent(BaseAgent):
                 cand_vpids.append(cc['viewpointId'])
                 used_viewidxs.add(cc['pointId'])
             # non cand views
-            # TODO: replace those random frames 
             view_img_fts.extend([x[:self.args.image_feat_size] for k, x \
                                  in enumerate(ob['feature']) if k not in used_viewidxs])
             view_ang_fts.extend([x[self.args.image_feat_size:] for k, x \
                                  in enumerate(ob['feature']) if k not in used_viewidxs])
-            nav_types.extend([0] * (len(ob['feature']) - len(used_viewidxs)))
+            nav_types.extend([0] * (36 - len(used_viewidxs)))
             # combine cand views and noncand views
             view_img_fts = np.stack(view_img_fts, 0)  # (n_views, dim_ft)
             view_ang_fts = np.stack(view_ang_fts, 0)
@@ -296,8 +229,8 @@ class Tour3DAgent(BaseAgent):
             batch_view_img_fts.append(torch.from_numpy(view_img_fts))
             batch_loc_fts.append(torch.from_numpy(view_loc_fts))
             batch_view_lens.append(len(view_img_fts))
-            batch_nav_types.append(torch.LongTensor([1]+[0]*(len(view_img_fts)-1)))
-            batch_cand_vpids.append([None]*len(view_img_fts))
+            batch_nav_types.append(torch.LongTensor([1]*12+[0]*24))
+            batch_cand_vpids.append([None]*36)
 
         
         batch_view_img_fts = pad_tensors(batch_view_img_fts).cuda()
@@ -342,11 +275,11 @@ class Tour3DAgent(BaseAgent):
         batch_vp_pos_fts = []
         for i, gmap in enumerate(gmaps):
             cur_cand_pos_fts = gmap.get_pos_fts(
-                obs[i]['viewpoint'], cand_vpids[i] if not self.no_loc_fts else [None]*len(cand_vpids[i]),
+                obs[i]['viewpoint'], cand_vpids[i],
                 obs[i]['heading'], obs[i]['elevation']
             )
             cur_start_pos_fts = gmap.get_pos_fts(
-                obs[i]['viewpoint'], [gmap.start_vp] if not self.no_loc_fts else [None],
+                obs[i]['viewpoint'], [gmap.start_vp],
                 obs[i]['heading'], obs[i]['elevation']
             )
             # add [stop] token at beginning
@@ -398,7 +331,7 @@ class Tour3DAgent(BaseAgent):
             )   # cuda
 
             gmap_pos_fts = gmap.get_pos_fts(
-                obs[i]['viewpoint'], gmap_vpids if not self.no_loc_fts else [None]*len(gmap_vpids), obs[i]['heading'], obs[i]['elevation'],
+                obs[i]['viewpoint'], gmap_vpids, obs[i]['heading'], obs[i]['elevation'],
             )
 
             gmap_pair_dists = np.zeros((len(gmap_vpids), len(gmap_vpids)), dtype=np.float32)
@@ -438,7 +371,7 @@ class Tour3DAgent(BaseAgent):
         }
 
     def teacher_action_r4r(
-        self, obs, vpids, ended, visited_masks=None, imitation_learning=False, t=None, traj=None, num_step_held=1
+        self, obs, vpids, ended, visited_masks=None, imitation_learning=False, t=None, traj=None
     ):
         """R4R is not the shortest path. The goal location can be visited nodes.
         """
@@ -447,11 +380,10 @@ class Tour3DAgent(BaseAgent):
             if ended[i]:                                            # Just ignore this index
                 a[i] = self.args.ignoreid
             else:
-                is_r2r = 'r2r' in ob['instr_id'] or 'tour' in ob['instr_id']
-                # is_r2r = True
+                is_r2r = 'r2r' in ob['instr_id']
                 if imitation_learning and is_r2r:
                     assert ob['viewpoint'] == ob['gt_path'][t]
-                    if t == len(ob['gt_path']) - num_step_held:
+                    if t == len(ob['gt_path']) - 1:
                         a[i] = 0    # stop
                     else:
                         goal_vp = ob['gt_path'][t + 1]
@@ -460,14 +392,11 @@ class Tour3DAgent(BaseAgent):
                                 a[i] = j
                                 break
                 else:
-                    print(ob['gt_path'])
-                    print(ob['viewpoint'])
-                    # raise NotImplementedError
+
                     if ob['viewpoint'] == ob['gt_path'][-1]:
                         a[i] = 0    # Stop if arrived
                     else:
-                        # scan = ob['scan']
-                        scan = ob['trajectoryId']
+                        scan = ob['scan']
                         cur_vp = ob['viewpoint']
                         min_idx, min_dist = self.args.ignoreid, float('inf')
                         for j, vpid in enumerate(vpids[i]):
@@ -481,7 +410,7 @@ class Tour3DAgent(BaseAgent):
                                     #     threshold=3.0
                                     # )['nDTW']
                                 elif self.args.expert_policy == 'spl':
-                                    print(scan, vpid, ob['gt_path'][-1], cur_vp)
+
                                     dist = self.shortest_distances[scan][vpid][ob['gt_path'][-1]] \
                                             + self.shortest_distances[scan][cur_vp][vpid]
                                 if dist < min_dist:
@@ -508,8 +437,7 @@ class Tour3DAgent(BaseAgent):
                 if ob['viewpoint'] == ob['gt_path'][-1]:
                     a[i] = 0    # Stop if arrived
                 else:
-                    # scan = ob['scan']
-                    scan = ob['trajectoryId']
+                    scan = ob['scan']
                     cur_vp = ob['viewpoint']
                     min_idx, min_dist = self.args.ignoreid, float('inf')
                     for j, vpid in enumerate(vpids[i]):
@@ -560,7 +488,7 @@ class Tour3DAgent(BaseAgent):
                 viewidx = self.scanvp_cands['%s_%s'%(ob['scan'], prev_vp)][action]
                 heading = (viewidx % 12) * math.radians(30)
                 elevation = (viewidx // 12 - 1) * math.radians(30)
-                env[i].sims[0].newEpisode([ob['scan']], [action], [ob['trajectoryId']], [heading], [elevation])
+                env[i].sims[0].newEpisode([ob['scan']], [action], [heading], [elevation])
 
     def train(
         self, 
@@ -578,28 +506,23 @@ class Tour3DAgent(BaseAgent):
     ):
         dataset_cfg = config.Pretrain if args.stage=='pretrain' else config.Multi
         loss_coef = dataset_cfg.LOSS_COEF.get(name, 1.)
-        # if args.stage=='pretrain' or step%2==0:
-        #################### imitation learning ####################
-        # try:
-        loss, _ = self.rollout(
-            args, name, config.Optim, batch,
-            model=model, criterion=criterion, dataset=dataset,
-            feedback="teacher", train_ml=loss_coef * args.teacher_forcing_coef,
-            entropy_metric=entropy_metric, instr_pred_metric=instr_pred_metric
-        )
-            # except Exception as e:
-            #     print(e)
-            #     loss = 0.
+        if args.stage=='pretrain' or step%2==0:
+            #################### imitation learning ####################
+            loss, _ = self.rollout(
+                args, name, config.Optim, batch,
+                model=model, criterion=criterion, dataset=dataset,
+                feedback="teacher", train_ml=loss_coef * args.teacher_forcing_coef,
+                entropy_metric=entropy_metric, instr_pred_metric=instr_pred_metric
+            )
 
-        # else:
-        #     ################### dagger training ####################
-        #     loss, _ = self.rollout(
-        #         args, name, config.Optim, batch,
-        #         model=model, criterion=criterion, dataset=dataset,
-        #         feedback="sample", train_ml=loss_coef,
-        #         entropy_metric=entropy_metric, instr_pred_metric=instr_pred_metric
-        #     )
-        #     # raise NotImplementedError
+        else:
+            #################### dagger training ####################
+            loss, _ = self.rollout(
+                args, name, config.Optim, batch,
+                model=model, criterion=criterion, dataset=dataset,
+                feedback="sample", train_ml=loss_coef,
+                entropy_metric=entropy_metric, instr_pred_metric=instr_pred_metric
+            )
 
         return loss * args.gradient_accumulation_step
 
@@ -706,18 +629,17 @@ class Tour3DAgent(BaseAgent):
         self.update_scanvp_cands(obs)
         batch_size = len(obs)
 
-        #torch.cuda.empty_cache()
-        # build graph: keep the start viewpoint
-        gmaps = [GraphMap(ob['viewpoint']) for ob in obs]
-        for i, ob in enumerate(obs):
-            gmaps[i].update_graph(ob)
+        # # build graph: keep the start viewpoint
+        # gmaps = [GraphMap(ob['viewpoint']) for ob in obs]
+        # for i, ob in enumerate(obs):
+        #     gmaps[i].update_graph(ob)
 
         traj = [{
             'instr_id': ob['instr_id'],
             'path': [[ob['viewpoint']]],
             'details': {},
         } for ob in obs]
-        #print(obs[0]['instr_id'])
+
         # Initialization the tracking state
         ended = np.array([False] * batch_size)
         just_ended = np.array([False] * batch_size)
@@ -734,11 +656,8 @@ class Tour3DAgent(BaseAgent):
         entropys = []
         ml_loss, cnt_loss = 0., 0.
         flag = False
-        nav_flag = False
-        
-        #print(f"Current view {obs[0]['instr_id']} {','.join(obs[0]['gt_path'])} ...")
+
         for t in range(max_action_len):
-            #print(f"Navigating step {t}_{obs[0]['instr_id']} ...")
             if isinstance(model, torch.nn.parallel.DistributedDataParallel):
                 # multi-gpu
                 if ended.all() or t == max_action_len - 1:
@@ -753,39 +672,32 @@ class Tour3DAgent(BaseAgent):
                     context = nullcontext
                 else:
                     context = nullcontext
-            # if obs[0]['opt_flag'][t+1]:
-            #     grad_context = nullcontext
-            # else:
-            #     grad_context = torch.no_grad
-            with context():
-                for i, gmap in enumerate(gmaps):
-                    if not ended[i]:
-                        gmap.node_step_ids[obs[i]['viewpoint']] = t + 1
 
-                #print(f"Navigating step {t}_{obs[0]['instr_id']} pano_inputs ...")
+            with context():
+                # for i, gmap in enumerate(gmaps):
+                #     if not ended[i]:
+                #         gmap.node_step_ids[obs[i]['viewpoint']] = t + 1
+
                 # graph representation
                 pano_inputs = self.panorama_feature_variable_object(obs)
                 panorama_out = model('panorama', pano_inputs)
-                #torch.cuda.empty_cache()
                 pano_embeds, pano_masks = panorama_out['pano_embeds'], panorama_out['pano_masks']
                 avg_pano_embeds = torch.sum(pano_embeds * pano_masks.unsqueeze(2), 1) / \
                                 torch.sum(pano_masks, 1, keepdim=True)  # [B, D=768]
 
-                #print(f"Navigating step {t}_{obs[0]['instr_id']} enumerate(gmaps) ...")
-                for i, gmap in enumerate(gmaps):
-                    if not ended[i]:
-                        # update visited node
-                        i_vp = obs[i]['viewpoint'] #graph id
-                        update_avg_pana_embeds = avg_pano_embeds[i].detach()  # update average features for gmap.
-                        gmap.update_node_embed(i_vp, update_avg_pana_embeds, rewrite=True)
-                        # update unvisited nodes
-                        for j, i_cand_vp in enumerate(pano_inputs['cand_vpids'][i]):
-                            if not gmap.graph.visited(i_cand_vp):
-                                # MF: i,j seems not relate to i_cand_vp [mod: the pano_embeds = cat[cand, none_cand]]
-                                update_pano_embeds = pano_embeds[i, j].detach()
-                                gmap.update_node_embed(i_cand_vp, update_pano_embeds)
+                # for i, gmap in enumerate(gmaps):
+                #     if not ended[i]:
+                #         # update visited node
+                #         i_vp = obs[i]['viewpoint']
+                #         update_avg_pana_embeds = avg_pano_embeds[i].detach()  # update average features for gmap.
+                #         gmap.update_node_embed(i_vp, update_avg_pana_embeds, rewrite=True)
+                #         # update unvisited nodes
+                #         for j, i_cand_vp in enumerate(pano_inputs['cand_vpids'][i]):
+                #             if not gmap.graph.visited(i_cand_vp):
+                #                 # MF: i,j seems not relate to i_cand_vp [mod: the pano_embeds = cat[cand, none_cand]]
+                #                 update_pano_embeds = pano_embeds[i, j].detach()
+                #                 gmap.update_node_embed(i_cand_vp, update_pano_embeds)
 
-                #print(f"Navigating step {t}_{obs[0]['instr_id']} nav_gmap_variable ...")
                 # navigation policy
                 nav_inputs = self.nav_gmap_variable(obs, gmaps)
                 nav_inputs.update(
@@ -812,37 +724,19 @@ class Tour3DAgent(BaseAgent):
                     nav_inputs,
                     cls_token = model.module.lang_model.cls_token[0] if hasattr(model, 'module') else model.lang_model.cls_token[0]
                 )
-                #torch.cuda.empty_cache()
-                
-                #print(f"Navigating step {t}_{obs[0]['instr_id']} model('navigation') ...")
-                nav_outs = model('navigation', nav_inputs, is_tour3d=True)
-                #torch.cuda.empty_cache()
+                nav_outs = model('navigation', nav_inputs)
 
                 # dynamic fusion
                 nav_logits = nav_outs['fuse_logits']
                 nav_vpids = nav_inputs['gmap_vpids']
 
                 nav_probs = torch.softmax(nav_logits / args.temperature, 1)
-                # nav_probs = 0.
 
                 imitation_learning = feedback == 'teacher'
                 # Imitation Learning
                 if train_ml is not None:
                     # [1] Supervised training
-                    # if t >= len(obs[0]['gt_path'])-1:
-                    #     print('debug')
-                    # if obs[0]['instr_id'] == "tour3d_bxbeU0IGTBw_001_0": #"tour3d_fq-BJA2Tz0s_014_0":
-                    #     print('debug')
-                        
-                    #print(f"Current view {t}_{obs[0]['instr_id']} {obs[0]['gt_path'][t] if t < len(obs[0]['gt_path']) else 'None'} ...")
-                    #print(f"Navigating step {t}_{obs[0]['instr_id']} teacher_action_r4r ...")
-                    # nav_targets = self.teacher_action_r4r(
-                    #     obs, nav_vpids, ended,
-                    #     visited_masks=nav_inputs['gmap_visited_masks'],
-                    #     imitation_learning=imitation_learning, t=t, traj=traj, num_step_held=1
-                    # )
-                    imitation_learning = True
-                    if 'tour3d' in data_type:
+                    if 'r2r' in data_type:
                         nav_targets = self.teacher_action_r4r(
                             obs, nav_vpids, ended,
                             visited_masks=nav_inputs['gmap_visited_masks'],
@@ -854,8 +748,6 @@ class Tour3DAgent(BaseAgent):
                             visited_masks=nav_inputs['gmap_visited_masks'],
                     )
                     ############# Single-Step Loss #############
-                    assert len(obs) == 1
-                    # if t < len(obs[0]['opt_flag']) and obs[0]['opt_flag'][t+1]:
                     cnt_loss += criterion(nav_logits, nav_targets) * train_ml / batch_size / args.gradient_accumulation_step
 
                     ml_loss += cnt_loss.detach()
@@ -864,7 +756,6 @@ class Tour3DAgent(BaseAgent):
                     if not validate:
                         cnt_loss.backward()
                     cnt_loss = 0.
-                    nav_flag = True
 
                 # Determinate the next navigation viewpoint
                 if feedback == 'teacher':  # imitation learning
@@ -893,11 +784,94 @@ class Tour3DAgent(BaseAgent):
                     a_t_stop = [ob['viewpoint'] == ob['gt_path'][-1] for ob in obs]
                 else:
                     a_t_stop = a_t == 0
+                
+                ########### Object Prediction Sub-task ###########
+                if (data_type[0] in ['soon', 'reverie']) and args.enable_og and flag:
+                    # graph representation
+                    pano_inputs = self.panorama_feature_variable_object(obs)
+                    panorama_out = model('panorama', pano_inputs)
+
+                    if 'obj_embeds' not in panorama_out:
+                        pano_embeds = panorama_out['pano_embeds']
+                        panorama_out.update({
+                            "obj_embeds": torch.zeros((pano_embeds.shape[0], 0, pano_embeds.shape[2]), dtype=pano_embeds.dtype, device=pano_embeds.device),
+                            "obj_masks": torch.zeros((pano_embeds.shape[0], 0), dtype=torch.int64, device=pano_embeds.device),
+                            "obj_loc_fts": torch.zeros((pano_embeds.shape[0], 0, 7), dtype=pano_embeds.dtype, device=pano_embeds.device)
+                        })
+
+                    nav_inputs.update({
+                        'obj_embeds': panorama_out['obj_embeds'],
+                        'obj_masks': panorama_out['obj_masks'],
+                        'obj_loc_fts': panorama_out['obj_loc_fts']
+                    })
+
+                    nav_inputs.update({
+                        'view_lens': pano_inputs['view_lens'],
+                        'instruction': instructions,
+                        'history': history,
+                        'hist_vis': hist_vis,
+                        'data_type': data_type
+                    })
+                    nav_inputs["prompts"] = self.prepare_prompts(
+                        "object_grounding",
+                        nav_inputs,
+                        cls_token = model.module.lang_model.cls_token[0] if hasattr(model, 'module') else model.lang_model.cls_token[0]
+                    )
+                    obj_logits = model('object_grounding', nav_inputs)['obj_logits']
+                    obj_targets = self.teacher_object(obs)
+
+                    if not validate:
+                        obj_loss = criterion(obj_logits, obj_targets) * args.obj_loss_coef / batch_size / args.gradient_accumulation_step
+                        obj_loss.backward()
+                        ml_loss += obj_loss.detach()
+
+                    # update obj results
+                    for i, gmap in enumerate(gmaps):
+                        i_vp = obs[i]['viewpoint']
+                        i_objids = obs[i]['obj_ids']
+                        i_obj_logits = obj_logits[i, 1:]
+                        if 'obj_directions' in obs[i]:
+                            traj[i].update({
+                                'pred_objid': i_objids[torch.argmax(i_obj_logits)] if len(i_objids) > 0 else None,
+                                'pred_obj_direction': obs[i]['obj_directions'][torch.argmax(i_obj_logits)] if len(
+                                    i_objids) > 0 else None,
+                            })
+                        else:
+                            traj[i].update({
+                                'pred_objid': i_objids[torch.argmax(i_obj_logits)] if len(i_objids) > 0 else None,
+                                'pred_obj_direction': None,
+                            })
+
+                ########### Fine-grained R2R Sub-task ###########
+                enable_fgr2r = (feedback == 'teacher') and (not flag) and (not a_t_stop[0]) and (data_type[0]=='r2r') and (not validate) and 'fg_instruction' in ob and args.enable_fgr2r
+                if enable_fgr2r:
+                    pano_inputs = self.panorama_feature_variable_12views(obs)
+                    panorama_out = model('panorama', pano_inputs)
+                    pano_embeds, pano_masks = panorama_out['pano_embeds'], panorama_out['pano_masks']
+                    nav_inputs = self.nav_gmap_variable(obs, gmaps)
+                    nav_inputs.update(
+                        self.nav_vp_variable(
+                            obs, gmaps, pano_embeds, pano_masks, pano_inputs['cand_vpids'],
+                            pano_inputs['view_lens'], pano_inputs['nav_types'],
+                        )
+                    )
+                    nav_inputs['instruction'] = ['where are we going with direction ({}) ?'.format(idx) for idx in nav_targets]
+                    nav_inputs["data_type"] = ['fgr2r' for idx in nav_targets]
+                    nav_inputs['answer'] = [ob['fg_instruction'][ob['fg_view'][t]] for ob in obs]
+                    nav_inputs['hist_vis'] = [[] for idx in nav_targets]
+                    nav_inputs['history'] = [[] for idx in nav_targets]
+                    nav_inputs["prompts"] = self.prepare_prompts("embodied_qa", nav_inputs)
+                    output = model('embodied_qa', nav_inputs, training=not validate, **kwargs)
+                    if not validate:
+                        lm_loss = output["loss"] * args.gen_loss_coef / batch_size / args.gradient_accumulation_step
+                        lm_loss.backward()
+                        instr_pred_metric.accumulate(lm_loss.detach().item() * args.gradient_accumulation_step)
+                        ml_loss += lm_loss.detach()
             
                 ########### Navigation Summarization Sub-task ###########
                 if data_type[0] == 'eqa':
                     enable_summarize = flag
-                elif data_type[0] in ['tour3d', 'r2r', 'soon', 'reverie', 'r2r_aug', 'reverie_aug']:
+                elif data_type[0] in ['r2r', 'soon', 'reverie', 'r2r_aug', 'reverie_aug']:
                     enable_summarize = (feedback == 'teacher' or feedback == 'argmax') and flag and args.enable_summarize and (not validate or args.mode=='test')
                 elif data_type[0] in ['cvdn']:
                     enable_summarize = False
@@ -906,17 +880,10 @@ class Tour3DAgent(BaseAgent):
 
                 if enable_summarize:  # gen loss
                     
-                    #print(f"Navigating step {t}_{obs[0]['instr_id']} enable_summarize ...")
                     pano_inputs = self.panorama_feature_variable_12views(obs)
-                    #torch.cuda.empty_cache()
-                    #print(f"Navigating step {t}_{obs[0]['instr_id']} enable_summarize model('panorama', pano_inputs)...")
                     panorama_out = model('panorama', pano_inputs)
-                    #torch.cuda.empty_cache()
                     pano_embeds, pano_masks = panorama_out['pano_embeds'], panorama_out['pano_masks']
-                    #print(f"Navigating step {t}_{obs[0]['instr_id']} enable_summarize nav_gmap_variable...")
                     nav_inputs = self.nav_gmap_variable(obs, gmaps)
-                    #print(f"Navigating step {t}_{obs[0]['instr_id']} enable_summarize nav_vp_variable...")
-                    #torch.cuda.empty_cache()
                     nav_inputs.update(
                         self.nav_vp_variable(
                             obs, gmaps, pano_embeds, pano_masks, pano_inputs['cand_vpids'],
@@ -930,16 +897,10 @@ class Tour3DAgent(BaseAgent):
                     nav_inputs["data_type"] = data_type
                     nav_inputs['answer'] = [ob.get('answer', '') for ob in obs]
                     nav_inputs["prompts"] = self.prepare_prompts("summarization", nav_inputs)
-                    # print(f"Navigating step {t}_{obs[0]['instr_id']} enable_summarize summarization...")
                     output = model('summarization', nav_inputs, training=not validate, **kwargs)
-                    #torch.cuda.empty_cache()
                     if not validate:
                         lm_loss = output["loss"] * args.gen_loss_coef / batch_size / args.gradient_accumulation_step
-                        # print(f"Navigating step {t}_{obs[0]['instr_id']} enable_summarize summarization summbef...")
-                        sync_all(rank, world_size, msg=obs[0]['instr_id']+'-{t}-summbef')
                         lm_loss.backward()
-                        # print(f"Navigating step {t}_{obs[0]['instr_id']} enable_summarize summarization summaft...")
-                        sync_all(rank, world_size, msg=obs[0]['instr_id']+'-{t}-summaft')
                         instr_pred_metric.accumulate(lm_loss.detach().item() * args.gradient_accumulation_step)
                         ml_loss += lm_loss.detach()
                     else:
@@ -962,7 +923,6 @@ class Tour3DAgent(BaseAgent):
                         else:
                             cpu_a_t.append(nav_vpids[i][a_t[i]])
 
-                #print(f"Navigating step {t}_{obs[0]['instr_id']} enable_summarize make_equiv_action...")
                 # Make action and get the new state
                 self.make_equiv_action(cpu_a_t, gmaps, obs, traj=traj, env=envs)
 
@@ -978,50 +938,29 @@ class Tour3DAgent(BaseAgent):
 
                 # get new observation and update graph
                 new_obs = []
-                try:
-                    for b_i in range(batch_size):
-                        # TODO
-                        if False and data_type[b_i] == 'eqa':
-                            raise NotImplementedError
-                        else:
-                            #print(f"Navigating step {t}_{obs[0]['instr_id']} new_obs get_obs...")
-                            new_obs.append(
-                                dataset.get_obs(
-                                    items=[batch_dict['item'][b_i]],
-                                    env=envs[b_i], data_type=data_type[b_i]
-                                )[0]
-                            )
-                except Exception as e:
-                    print(e)
+                for b_i in range(batch_size):
+                    # TODO
+                    if False and data_type[b_i] == 'eqa':
+                        raise NotImplementedError
+                    else:
+                        new_obs.append(
+                            dataset.get_obs(
+                                items=[batch_dict['item'][b_i]],
+                                env=envs[b_i], data_type=data_type[b_i]
+                            )[0]
+                        )
                 obs = new_obs
 
-                #print(f"Navigating step {t}_{obs[0]['instr_id']} update_scanvp_cands ...")
                 self.update_scanvp_cands(obs)
 
                 for i, ob in enumerate(obs):
                     if not ended[i]:
-                        #print(f"Navigating step {t}_{obs[0]['instr_id']} update_graph ...")
                         gmaps[i].update_graph(ob)
 
                 ended[:] = np.logical_or(ended, np.array([x is None for x in cpu_a_t]))
 
                 if flag:
                     break
-                # if nav_flag:
-                #     break
-            # Ensure dist is initialized
-            if dist.is_initialized():
-                rank = dist.get_rank()
-                world_size = dist.get_world_size()
-            else:
-                rank = 0
-                world_size = 1
-            #torch.cuda.empty_cache()
-
-            # print(f"Rank {rank}: Exited context at iteration {t} - {obs[0]['instr_id']}")
-
-            # sync_all(rank, world_size, msg=obs[0]['instr_id']+'-{t}')
-            # #print(f"Rank {rank}: Passed barrier at iteration {t} - {obs[0]['instr_id']}")
 
         return ml_loss, traj
     

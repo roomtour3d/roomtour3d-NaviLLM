@@ -29,6 +29,8 @@ def read_args():
     # local fusion
     parser.add_argument('--off_batch_task', action='store_true', default=False, help="whether all process is training same task")
     parser.add_argument('--debug', action="store_true", help="debug mode")
+    parser.add_argument('--few_shot', type=int, default=None, help='sample number for few shot')
+    parser.add_argument('--tour3d_nav_head', action="store_true", help="whether use seperate nav head for tour3d")
     parser.add_argument('--seed', type=int, default=0)
 
     parser.add_argument("--num_epochs", type=int, default=30)
@@ -90,6 +92,7 @@ def read_args():
     parser.add_argument('--enable_og', action='store_true', default=False, help="object grounding task")
     parser.add_argument("--enable_summarize", action="store_true", help="perform EQA or generate instructions")
     parser.add_argument("--enable_fgr2r", action="store_true", help="perform fgr2r for R2R")
+    parser.add_argument("--disable_nav", action="store_true", help="disable nav loss")
     parser.add_argument("--gen_loss_coef", type=float, default=1.)
     parser.add_argument("--obj_loss_coef", type=float, default=1.)
     parser.add_argument("--teacher_forcing_coef", type=float, default=1.)

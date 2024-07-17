@@ -94,7 +94,8 @@ def train_one_epoch(
         )
         loss_metric.accumulate(loss.item())
         loss_stats[name].accumulate(loss.item())
-
+        torch.cuda.empty_cache()
+        
         if (step+1) % args.gradient_accumulation_step==0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), 40.)
             optimizer.step()

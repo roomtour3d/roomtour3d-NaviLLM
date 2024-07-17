@@ -9,6 +9,7 @@ Feature:
     "mp3d": "eva_features/mp3d_EVA02-CLIP-L-14-336.hdf5"
     "scan_qa": "eva_features/scanqa_EVA02-CLIP-L-14-336.hdf5"
     "room_tour": "eva_features/web_obj_prog_p1_EVA02-CLIP-L-14-336.hdf5"
+    "room3d_tour": "eva_features/web_3d_obj_prog_crop_p1_EVA02-CLIP-L-14-336.hdf5"
     "coco": "eva_features/coco_EVA02-CLIP-L-14-336.hdf5"
 
   # object
@@ -69,6 +70,16 @@ Dataset:
       "train": "p1_train_reformat.json"
       # "train": "p1_wroom_train_reformat_v2.json"
     }
+  Tour3D:
+    DIR: "RoomTour"
+    SPLIT: {
+      "train": "p1_train_colmap_trajectory_tour3d.json"
+      # "train": "p1_train_colmap_trajectory_tour3d_-0Z00G94Nl8.json"
+      # "train": "p1_train_reformat_wroomloc_wtemporal.json"
+      # "train": "p1_train_reformat_wroomloc.json"
+      # "train": "p1_train_reformat.json"
+      # "train": "p1_wroom_train_reformat_v2.json"
+    }
   EQA:
     DIR: "EQA_MP3D"
     SPLIT: {
@@ -97,14 +108,24 @@ Dataset:
 Pretrain:
   # SOURCE: ['R2R_AUG', 'REVERIE_AUG', 'R2R', 'REVERIE', 'SOON', 'CVDN', 'ScanQA']
   SOURCE: ['R2R_AUG', 'REVERIE_AUG', 'RoomTour', 'R2R', 'REVERIE', 'SOON', 'CVDN', 'ScanQA']
-  # SOURCE: ['RoomTour']
+  # SOURCE: ['R2R_AUG', 'REVERIE_AUG', 'RoomTour', 'Tour3D', 'R2R', 'REVERIE', 'SOON', 'CVDN', 'ScanQA']
+  # SOURCE: ['Tour3D', 'RoomTour', 'ScanQA', 'LLaVA', 'R2R', 'REVERIE']
+  # Ratio: [20, 10, 5, 2, 10, 5]
+  # SOURCE: ['Tour3D', 'RoomTour', 'ScanQA', 'LLaVA']
+  # SOURCE: ['Tour3D']
+  # SOURCE: ['R2R']
   # SOURCE: ['R2R_AUG', 'REVERIE_AUG', 'R2R', 'REVERIE', 'SOON', 'CVDN', 'ScanQA']
-  # SOURCE: ['RoomTour', 'R2R', 'REVERIE', 'SOON', 'CVDN', 'ScanQA']
+  # SOURCE: ['Tour3D', 'R2R_AUG', 'REVERIE_AUG', 'RoomTour', 'R2R', 'REVERIE', 'SOON', 'CVDN', 'ScanQA']
+  # Ratio: [5, 20, 2, 20, 1, 1, 1, 1, 1]
+  # SOURCE: ['Tour3D', 'RoomTour', 'ScanQA', 'LLaVA', 'R2R', 'REVERIE']
   # SOURCE: ['ScanQA', 'RoomTour']
   Ratio: [20, 2, 20, 1, 1, 1, 1, 1]
+  # Ratio: [20, 10, 5, 2, 10, 5]
+  # Ratio: [5, 5, 2, 1, 10, 1]
   # Ratio: [20]
   # Ratio: [20, 2, 1, 1, 1, 1, 1]
   # Ratio: [1, 1]
+  # Ratio: [15, 20, 5, 2]
   LOSS_COEF: {
     "R2R_AUG": 1,
     "REVERIE_AUG": 1
@@ -112,8 +133,10 @@ Pretrain:
 
 
 Multi:
-  SOURCE: ['R2R', 'REVERIE', 'CVDN','SOON', 'ScanQA', 'LLaVA']
-  Ratio: [20, 5, 1, 5, 5, 5]
+  # SOURCE: ['R2R', 'REVERIE', 'CVDN','SOON', 'ScanQA', 'LLaVA']
+  SOURCE: ['Tour3D', 'RoomTour', 'ScanQA', 'LLaVA', 'R2R', 'REVERIE']
+  # Ratio: [20, 5, 1, 5, 5, 5]
+  Ratio: [15, 20, 5, 2, 10, 5]
   LOSS_COEF: {
   }
 
@@ -131,12 +154,13 @@ Optim:
   val_max_action_len: {
     "R2R": 15,
     "REVERIE": 15,
-    "CVDN": 30, # from VLN-SIG
+    "CVDN": 19, # from VLN-SIG
     "SOON": 20, # from DUET
     "EQA": 15,
   }
   train_max_action_len: {
     "R2R": 15,
+    "Tour3D": 15,
     "REVERIE": 15,
     "CVDN": 15,
     "SOON": 15,

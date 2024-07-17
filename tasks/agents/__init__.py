@@ -8,6 +8,7 @@ from .soon import SOONAgent
 from .scanqa import ScanQAAgent
 from .llava import LLaVAAgent
 from .roomtour import RoomTourAgent
+from .tour3d_agent import Tour3DAgent
 
 
 def load_agent(name, *args, **kwargs):

@@ -1,4 +1,5 @@
 import json
+import random
 import copy
 import numpy as np
 from .mp3d_dataset import MP3DDataset
@@ -41,7 +42,7 @@ class REVERIEDataset(MP3DDataset):
         item["path"] = self.shortest_paths[item["scan"]][start_vp][end_vp]
         return item
 
-    def load_data(self, anno_file, obj2vps, debug=False):
+    def load_data(self, anno_file, obj2vps, debug=False, few_shot=None):
         with open(str(anno_file), "r") as f:
             data = json.load(f)
 
@@ -74,6 +75,10 @@ class REVERIEDataset(MP3DDataset):
                 sample_index += 1
         if debug:
             new_data = new_data[:20]
+        if few_shot is not None and 'train' in str(anno_file):
+            # new_data = new_data[:few_shot]
+            scenes = ['S9hNv5qa7GM', 'i5noydFURQK', '7y3sRwLe3Va', 'b8cTxDM8gDG', 'JeFG25nYj2p', 'r47D5H71a5s', 'cV4RVeZvu5T', '5q7pvUzZiYa', 'HxpKQynjfin', 'EDJbREhghzL']
+            new_data = [d for d in new_data if d['scan'] in scenes[:few_shot+1]]
 
         gt_trajs = {
             x['instr_id']: (x['scan'], x['path'], x['objId']) \

@@ -7,6 +7,7 @@ import json
 import os
 import glob
 import math
+import pickle as pkl
 import msgpack
 import msgpack_numpy
 from dataclasses import dataclass
@@ -48,27 +49,47 @@ class location_neighbour:
     longFrameId: str
     rel_heading: float
     rel_elevation: float
+    index: int
+
+def transform_loc_neigh_to_loc(loc_neigh, base_heading, base_elevation):
+    loc = location(
+                x=loc_neigh.x,
+                y=loc_neigh.y,
+                z=loc_neigh.z,
+                heading=loc_neigh.rel_heading+base_heading,
+                elevation=loc_neigh.rel_elevation+base_elevation,
+                frameId=loc_neigh.frameId)
+    return loc
 
 @dataclass
 class state:
     videoId: str
+    longId: str
     location: location
     viewIndex: int
+    trajectoryId: str
     heading: float 
     elevation: float
 
     def nextObs(self, step):
         self.viewIndex = self.viewIndex + step
-        self.location = self.neighbours[self.viewIndex-1]
+        self.location = transform_loc_neigh_to_loc(self.neighbours[self.viewIndex], self.heading, self.elevation)
         #TODO heading/elevation; Especially, when the current index changes, the rel_heading and rel_elevation should also be adapted.
-        self.current_nav_type_to_base_view = self.navigable[self.viewIndex-1]
+        self.current_nav_type_to_base_view = self.navigable[self.viewIndex]
+
+        #in video sim, the shift of fake views doesnt change the heading and elevation (as alway keep on current spot with only one current view)
+        # self.heading = self.location.heading
+        # self.elevation = self.location.elevation
 
     def distance(self, frame_loc):
-        if frame_loc.videoId != self.videoId:
-            return 500
-        distance = abs(int(frame_loc.frameId.replace('.png', '').replace('output_frame_', '')) \
-                   - int(self.location.frameId.replace('.png', '').replace('output_frame_', ''))) // 6 * 1.25
-        return distance
+        # if frame_loc.videoId != self.videoId:
+        #     return 500
+        # distance = abs(int(frame_loc.frameId.replace('.png', '').replace('output_frame_', '')) \
+        #            - int(self.location.frameId.replace('.png', '').replace('output_frame_', ''))) // 6 * 1.25
+        return 0
+
+    def set_nextView(self, nextViewId):
+        self.nextViewId = nextViewId
 
     def set_nextFrame(self, frame_loc):
         self.nextFrame = frame_loc
@@ -97,136 +118,233 @@ class state:
         else:
             relevantFrames = []
         if hasattr(self, 'nextFrame'):
-            self.neighbours = [self.nextFrame] + relevantFrames + self.irrelevantFrames
-            navigable = [1] + navigable + [0]*len(self.irrelevantFrames)
+            assert isinstance(self.nextFrame, list)
+            self.neighbours = self.nextFrame + relevantFrames + self.irrelevantFrames
+            navigable = [1] * len(self.nextFrame) + navigable + [0]*len(self.irrelevantFrames)
         else:
             self.neighbours = relevantFrames + self.irrelevantFrames
             navigable = navigable + [0]*len(self.irrelevantFrames)
-        new_neighbours = sorted(self.neighbours, key=lambda x:x.longFrameId)
-        neighbour_idx_mapping = {newidx:self.neighbours.index(n) for newidx, n in enumerate(new_neighbours)}
-        self.navigable = [navigable[neighbour_idx_mapping[newidx]] for newidx in range(len(navigable))]
-        self.neighbours = new_neighbours
+
+        # new_neighbours = sorted(self.neighbours, key=lambda x:x.longFrameId)
+        # neighbour_idx_mapping = {newidx:self.neighbours.index(n) for newidx, n in enumerate(self.neighbours)}
+        # self.navigable = [navigable[neighbour_idx_mapping[newidx]] for newidx in range(len(navigable))]
+        # self.neighbours = new_neighbours
+        self.navigable = navigable
+
+def store_dict_to_hdf5(hdf_group, dictionary):
+    for key, value in dictionary.items():
+        str_key = str(key)  # Convert the key to a string
+        if isinstance(value, dict):
+            subgroup = hdf_group.create_group(str_key)
+            store_dict_to_hdf5(subgroup, value)
+        elif isinstance(value, np.ndarray):
+            hdf_group.create_dataset(str_key, data=value)  # Store numpy arrays as datasets
+        elif isinstance(value, (int, float)):
+            hdf_group.create_dataset(str_key, data=value)  # Store numeric data as datasets
+        elif isinstance(value, str):
+            hdf_group.create_dataset(str_key, data=np.string_(value))  # Store strings as datasets
+        else:
+            raise TypeError(f"Unsupported data type for key {key}: {type(value)}")
 
 #     return sim
 class VideoSim:
-    def __init__(self, video_trajectory_dir):
+    cached_vid_sim = None
+
+    def __init__(self, video_trajectory_dir, anno_file):
         self.candidate_negative_frames_cnt = 6
         self.candidate_negative_interval = 20
         self.candidate_positive_frames_cnt = 2
         self.candidate_positive_interval = 2
 
         all_videos = glob.glob(video_trajectory_dir + '/*json')
+        all_annos = json.load(open(anno_file))
 
         all_video_entries = {}
-        last_videoId = None
-        last_video_frames = None
-        for i, file in enumerate(all_videos):
-            vid = os.path.basename(file).replace('.json', '')
-            if last_video_frames is None:
-                last_videoId = os.path.basename(all_videos[i-1]).replace('.json', '')
-                last_video = all_videos[i-1] if i != 0 else all_videos[-1]
-                last_video_frames = []
-                for entry in json.load(open(last_video)):
-                    last_video_frames.extend(entry['frames'])
-                last_video_frames = list(set(last_video_frames))
-                last_video_frames = sorted(last_video_frames)
-            
-            current_video_entries = {}
-            current_video_frames = []
-            current_total_idx = 0
-            for entry in json.load(open(file)):
-                current_video_frames.extend(entry['frames'])
-            current_video_frames = list(set(current_video_frames))
-            current_video_frames = sorted(current_video_frames)
-            for entry in json.load(open(file)):
-                for j, frame in enumerate(entry['frames']):
-                    current_video_entries[frame] = {'nextFrame': {'videoId': vid, 'frameId': 
-                                                                  entry['frames'][j+1]} if j < len(entry['frames'])-1 else None,
-                                                    'relevantFrames': self.sample_relevant_frames(vid, current_video_frames, current_total_idx+j),
-                                                    'irrelevantFrames': self.sample_irrelevant_frames(last_videoId, last_video_frames, current_total_idx+j)}
-                current_total_idx += len(entry['frames'])
+        # print("Creating video sim ...")
+        for anno in all_annos:
+            videoId = anno['videoId']
+            trajectoryId = anno['longId']
+            colmapId = trajectoryId.split('|')[0]
+            optView = anno['optView']
+            optView = optView if optView.endswith('.png') else optView.replace('.png', '')
+            path = anno['path']
+            # nextViewId = optView+'.png'
 
-            all_video_entries[vid] = current_video_entries
-            last_videoId = vid
-            last_video_frames = current_video_frames
+            turnViewId = optView
+            idx_turn = path.index(turnViewId)
+            turnFrameIds = list(map(int, trajectoryId.split('|')[1].split('%')))
+
+            for idx_cur, curViewId in enumerate(path):
+                curFrameId = int(curViewId.replace(f"{videoId}_output_frame_", '').replace('.png', ''))
+                if idx_cur < len(path) - 1:
+                    nextViewId = path[idx_cur+1]
+                    nextFrameIds = [int(nextViewId.replace(f"{videoId}_output_frame_", '').replace('.png', ''))]
+                    if nextViewId == optView:
+                        nextViewId = trajectoryId
+                        nextFrameIds = list(map(int, trajectoryId.split('|')[1].split('%')))
+                else:
+                    nextViewId = f"{videoId}_output_frame_{turnFrameIds[0]:04d}.png"
+                    nextFrameIds = [turnFrameIds[0]]
+                
+                nav = [1] * len(nextFrameIds)
+                nextViewIndex = list(range(len(nextFrameIds)))
+                all_video_entries.setdefault(videoId, {}).setdefault(trajectoryId, {}).setdefault(curViewId, {'nextViewId': nextViewId, 
+                                                    'curFrameId': curFrameId,
+                                                    'nextViewIndex': nextViewIndex,
+                                                    'nextFrameIds': nextFrameIds,
+                                                    'nav': nav,
+                                                    'trajectoryId': trajectoryId, 
+                                                    'colmapId': colmapId})
+
+        # # try:
+        # #     all_video_entries = pkl.load(open('/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/video_sim_all_plain_next_view_only_p1_online_cache.pkl', 'rb'))
+        # # except:
+        # final_annos = pkl.load(open(f'/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/video_sim_all_plain_next_view_only_p1.pkl', 'rb'))
+        # all_video_entries = {}
+        # all_distance_angles = {}
+        # last_videoId = None
+        # last_video_frames = None
+        # print("Creating video sim ...")
+        # # for i, file in enumerate(all_videos):
+        # for vid in final_annos:
+        #     # vid = os.path.basename(file).replace('.json', '')
+        #     # vid_distance_angles = pkl.load(open("/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/geoinformation_colmap_degree_and_distance_p1/{}.pkl", 'rb'))
             
+        #     current_video_entries = {}
+        #     # for entry in json.load(open(file)):
+        #     for entry in final_annos[vid]:
+        #         curViewId = entry["curViewId"]
+        #         if curViewId == 'bxbeU0IGTBw_output_frame_0387.png':
+        #             print("debug")
+        #         curFrameId = entry["curFrameId"]
+        #         videoId = entry["videoId"]
+        #         nextViewId = entry["nextViewId"]
+        #         nextViewIndex = entry["nextViewIndex"]
+        #         nextFrameIds = entry["nextFrameIds"]
+        #         colmapId = entry['scene']
+        #         trajectoryId = entry['trajectoryId']
+        #         # candidates = entry["candidates"]
+
+        #         # all_fids = entry["history"]+entry["cur"]+entry["nextId"]+entry["future"]
+        #         #TODO: curIds should restore longids
+        #         # for fid in entry['nextViewId']:
+        #         current_video_entries.setdefault(trajectoryId, {}).setdefault(curViewId, {}).update({curViewId: {'nextViewId': nextViewId, 
+        #                                             'curFrameId': curFrameId,
+        #                                             'nextViewIndex': nextViewIndex,
+        #                                             'nextFrameIds': nextFrameIds,
+        #                                             'nav': entry['navigable'],
+        #                                             'trajectoryId': trajectoryId, 
+        #                                             'colmapId': entry['scene']}})
+
+        #     all_video_entries[vid] = current_video_entries
+        
+        self.init_cached_sim()
         self.all_video_entries = all_video_entries
 
+    @classmethod
+    def init_cached_sim(self):
+        if self.cached_vid_sim is None:
+            print("Loaing sim cache ...")
+            # self.cached_vid_sim = pkl.load(open('/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/geoinformation_colmap_p1/geo_trajectory.pkl', 'rb'))
+            self.cached_vid_sim = pkl.load(open('/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/geoinformation_colmap_p1/geo_bak/geo_trajectory.pkl', 'rb'))
+        
+    def get_loc(self, colmapId, frameId):
+        return self.cached_vid_sim[colmapId][frameId]['pos'] 
+
+    def get_rel_heading(self, colmapId, frameId1, frameId2):
+        #TODO
+        return self.cached_vid_sim[colmapId][frameId2]['yaw'] - \
+            self.cached_vid_sim[colmapId][frameId1]['yaw']
+        # return 0.2
+
+    def get_rel_elevation(self, colmapId, frameId1, frameId2):
+        #TODO
+        return self.cached_vid_sim[colmapId][frameId2]['pitch'] - \
+            self.cached_vid_sim[colmapId][frameId1]['pitch']
+        # return 0.1
+
+    def get_heading(self, colmapId, frameId):
+        #TODO
+        return math.radians(self.cached_vid_sim[colmapId][frameId]['yaw'] % 360)
+        # return 0.2
+
+    def get_elevation(self, colmapId, frameId):
+        #TODO
+        return math.radians(self.cached_vid_sim[colmapId][frameId]['pitch'] % 360)
+        # return 0.1
 
     def getNextObs(self, step):
+        # raise NotImplementedError
         assert all([step + state.viewIndex <= len(state.neighbours) for state in self.state])
         [state.nextObs(step) for state in self.state]
 
-    def sample_irrelevant_frames(self, videoId, frameIds, idx):
-        sampled_res = []
-        for i in range(self.candidate_negative_frames_cnt):
-            new_idx = (idx + self.candidate_negative_interval*i)%len(frameIds)
-            sampled_res.append({'videoId': videoId,
-                                'frameId': frameIds[new_idx]})
-        return sampled_res
+    # def sample_irrelevant_frames(self, videoId, frameIds, idx):
+    #     sampled_res = []
+    #     for i in range(self.candidate_negative_frames_cnt):
+    #         new_idx = (idx + self.candidate_negative_interval*i)%len(frameIds)
+    #         sampled_res.append({'videoId': videoId,
+    #                             'frameId': frameIds[new_idx]})
+    #     return sampled_res
 
-    def sample_relevant_frames(self, videoId, frameIds, idx):
-        sampled_res = []
-        for i in range(self.candidate_positive_frames_cnt):
-            interval = self.candidate_positive_interval if i==0 else -self.candidate_positive_interval
-            new_idx = idx + interval
-            if new_idx >= len(frameIds):
-                continue 
-            if new_idx < 0:
-                continue
-            sampled_res.append({'videoId': videoId,
-                                'frameId': frameIds[new_idx]})
-        return sampled_res
+    # def sample_relevant_frames(self, videoId, frameIds, idx):
+    #     sampled_res = []
+    #     for i in range(self.candidate_positive_frames_cnt):
+    #         interval = self.candidate_positive_interval if i==0 else -self.candidate_positive_interval
+    #         new_idx = idx + interval
+    #         if new_idx >= len(frameIds):
+    #             continue 
+    #         if new_idx < 0:
+    #             continue
+    #         sampled_res.append({'videoId': videoId,
+    #                             'frameId': frameIds[new_idx]})
+    #     return sampled_res
 
-    def _set_state(self, videoId, frameId, x=0., y=0., z=0., heading=0., elevation=0.):
+    def _set_state(self, videoId, longId, frameId, colmapId, trajectoryId, index, x=0., y=0., z=0., heading=0., elevation=0.):
         loc = location(x=x, 
-                       y=y, 
+                       y=y,
                        z=z,
                        heading=heading,
                        elevation=elevation,
                        frameId=frameId)
-        st = state(videoId=videoId, location=loc, viewIndex=0, heading=0., elevation=0)
+        
+        st = state(videoId=videoId, longId=longId, location=loc, viewIndex=index, trajectoryId=trajectoryId, heading=self.get_heading(colmapId, frameId), elevation=self.get_elevation(colmapId, frameId))
         return st
     
     # this is to set a new current obs with the specified viewpoint, heading and elevation. in web videos, we only care the next frameid, as there is no such elevations and headings
-    def newEpisode(self, videoIds, frameIds, headings=None, elevations=None):
+    def newEpisode(self, videoIds, curViewIds, trajectoryIds, headings=None, elevations=None, cindex=0):
         self.state = []
-        for videoId, frameId, heading, elevation in zip(videoIds, frameIds, headings, elevations):
-            state = self._set_state(videoId, frameId)
-            nextFrame = self.all_video_entries[videoId][frameId]['nextFrame']
-            irrelevantFrames = self.all_video_entries[videoId][frameId]['irrelevantFrames']
-            relevantFrames = self.all_video_entries[videoId][frameId]['relevantFrames']
+        for videoId, curViewId, trajectoryId, heading, elevation in zip(videoIds, curViewIds, trajectoryIds, headings, elevations):
+            curFrameId = self.all_video_entries[videoId][trajectoryId][curViewId]['curFrameId']
+            nextViewId = self.all_video_entries[videoId][trajectoryId][curViewId]['nextViewId']
+            nextFrameIds = self.all_video_entries[videoId][trajectoryId][curViewId]['nextFrameIds']
+            nextViewIndex = self.all_video_entries[videoId][trajectoryId][curViewId]['nextViewIndex']
+            assert len(nextViewIndex) == len(nextFrameIds)
+            # negativeFrame = self.all_video_entries[videoId][curViewId]['negativeFrame']
+            colmapId = self.all_video_entries[videoId][trajectoryId][curViewId]['colmapId']
+            # if 'longId' in self.all_video_entries[videoId][curViewId]:
+            #     longId = self.all_video_entries[videoId][curViewId]['longId']
+            # else:
+            #     longId = f"{nextFrame['videoId']}%{nextFrame['frameId']}"
+            curLoc = self.get_loc(colmapId, curFrameId)
+            state = self._set_state(videoId, curViewId, curFrameId, colmapId, trajectoryId, cindex, curLoc[0], curLoc[1], curLoc[2])
             
-            if len(relevantFrames) > 0:
-                relevantFramelocs = [location_neighbour(x=0.,
-                                    y=0.,
-                                    z=0.,
-                                    videoId=frame["videoId"], 
-                                    frameId=frame["frameId"], 
-                                    longFrameId=f"{frame['videoId']}%{frame['frameId']}",
-                                    rel_heading=0.,
-                                    rel_elevation=0.) for frame in relevantFrames]
-                state.set_relevantFrames(relevantFramelocs)
-            if nextFrame != None:
-                nextFrameloc = location_neighbour(x=0.,
-                                                y=0.,
-                                                z=0.,
-                                                videoId=nextFrame["videoId"], 
-                                                frameId=nextFrame["frameId"], 
-                                                longFrameId=f"{nextFrame['videoId']}%{nextFrame['frameId']}",
-                                                rel_heading=0.,
-                                                rel_elevation=0.)
-                state.set_nextFrame(nextFrameloc)
-            irrelevantFramelocs = [location_neighbour(x=0.,
-                                                     y=0.,
-                                                     z=0.,
-                                                     videoId=frame["videoId"], 
-                                                     frameId=frame["frameId"], 
-                                                     longFrameId=f"{frame['videoId']}%{frame['frameId']}",
-                                                     rel_heading=0.,
-                                                     rel_elevation=0.) for frame in irrelevantFrames]
-            
-            state.set_irrelevantFrames(irrelevantFramelocs)
+            if nextViewId != None:
+                nextFrameloc = []
+                for viewindex, nframeid in zip(nextViewIndex, nextFrameIds):
+                    nextloc = self.get_loc(colmapId, nframeid)
+                    nextFrameloc.append(location_neighbour(x=nextloc[0],
+                                                    y=nextloc[1],
+                                                    z=nextloc[2],
+                                                    videoId=videoId, 
+                                                    frameId=nframeid, 
+                                                    longFrameId=nextViewId,
+                                                    rel_heading=self.get_rel_heading(colmapId, curFrameId, nframeid),
+                                                    rel_elevation=self.get_rel_elevation(colmapId, curFrameId, nframeid),
+                                                    index=viewindex))
+                    state.set_nextFrame(nextFrameloc)
+                    state.set_nextView(nextViewId)
+            # if len(negativeFrame) > 0: locs)
+            state.set_irrelevantFrames([])
             state.set_neighbours()
             state.current_nav_type_to_base_view = 1
 
@@ -243,8 +361,8 @@ class VideoSim:
 
 
 #TODO: fake a simulator for room tour videos
-def construct_fake_simulator(connectivity_dir):
-    return VideoSim(connectivity_dir)
+def construct_fake_simulator(connectivity_dir, anno_file):
+    return VideoSim(connectivity_dir, anno_file)
 
 def angle_feature(heading, elevation, angle_feat_size):
     return np.array(
@@ -252,6 +370,17 @@ def angle_feature(heading, elevation, angle_feat_size):
          math.sin(elevation), math.cos(elevation)] * (angle_feat_size // 4),
         dtype=np.float32)
 
+def get_angle_feature_nextviews(state, angle_feat_size):
+    base_heading = state.heading
+    base_elevation = state.elevation
+    feature = np.empty((len(state.get_neighbours()), angle_feat_size), np.float32)
+    for ix, neighbour in enumerate(state.get_neighbours()):
+        heading = neighbour.rel_heading - base_heading
+        elevation = neighbour.rel_elevation - base_elevation
+        assert ix == neighbour.index
+
+        feature[ix, :] = angle_feature(heading, elevation, angle_feat_size)
+    return feature
 
 def get_point_angle_feature(sim, angle_feat_size, baseViewId=0):
     feature = np.empty((36, angle_feat_size), np.float32)
@@ -280,7 +409,7 @@ def get_all_point_angle_feature(sim, angle_feat_size, connectivity_dir=None):
     return [get_point_angle_feature(sim, angle_feat_size, baseViewId) for baseViewId in range(36)]
 
 
-def load_nav_graphs(connectivity_dir, scans):
+def load_nav_graphs(anno_file):
     ''' Load connectivity graph for each scan 
         data json:
             heading: 0
@@ -292,34 +421,66 @@ def load_nav_graphs(connectivity_dir, scans):
             neighbours
                 pose
     '''
-
     def distance(pose1, pose2):
         ''' Euclidean distance between two graph poses '''
-        return ((pose1['pose'][3] - pose2['pose'][3]) ** 2 \
-                + (pose1['pose'][7] - pose2['pose'][7]) ** 2 \
-                + (pose1['pose'][11] - pose2['pose'][11]) ** 2) ** 0.5
+        return ((pose1['pos'][0] - pose2['pos'][0]) ** 2 \
+                + (pose1['pos'][1] - pose2['pos'][1]) ** 2 \
+                + (pose1['pos'][2] - pose2['pos'][2]) ** 2) ** 0.5
 
     graphs = {}
-    for scan in scans:
-        with open(os.path.join(connectivity_dir, '%s_connectivity.json' % scan)) as f:
-            G = nx.Graph()
-            positions = {}
-            data = json.load(f)
-            # for i, item in enumerate(data):
-            #     if item['included']:
-            #         for j, conn in enumerate(item['unobstructed']):
-            #             if conn and data[j]['included']:
-            #                 positions[item['image_id']] = np.array([item['pose'][3],
-            #                                                         item['pose'][7], item['pose'][11]]);
-            #                 assert data[j]['unobstructed'][i], 'Graph should be undirected'
-            #                 G.add_edge(item['image_id'], data[j]['image_id'], weight=distance(item, data[j]))
-            for i, item in enumerate(data):
-                for j, conn in enumerate(item['neighbours']):
-                    positions[item['image_id']] = np.array([item['pose'][3],
-                                                  item['pose'][7], item['pose'][11]])
-                    G.add_edge(item['image_id'], data[j]['image_id'], weight=distance(item, data[j]))
-            nx.set_node_attributes(G, values=positions, name='position')
-            graphs[scan] = G
+    # cached_vid_sim = pkl.load(open('/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/geoinformation_colmap_p1/geo_trajectory.pkl', 'rb'))
+    cached_vid_sim = pkl.load(open('/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/geoinformation_colmap_p1/geo_bak/geo_trajectory.pkl', 'rb'))
+    all_annos = json.load(open(anno_file))
+
+    all_video_entries = {}
+    # print("Creating video sim ...")
+    for anno in all_annos:
+        G = nx.Graph()
+        positions = {}
+
+        videoId = anno['videoId']
+        trajectoryId = anno['longId']
+        colmapId = trajectoryId.split('|')[0]
+        optView = anno['optView']
+        optView = optView if optView.endswith('.png') else optView.replace('.png', '')
+        path = anno['path']
+        # nextViewId = optView+'.png'
+
+        turnViewId = optView
+        idx_turn = path.index(turnViewId)
+        turnFrameIds = list(map(int, trajectoryId.split('|')[1].split('%')))
+
+        for idx_cur, curViewId in enumerate(path):
+            curFrameId = int(curViewId.replace(f"{videoId}_output_frame_", '').replace('.png', ''))
+            if idx_cur < len(path) - 1:
+                nextViewId = path[idx_cur+1]
+                nextFrameIds = [int(nextViewId.replace(f"{videoId}_output_frame_", '').replace('.png', ''))]
+                if nextViewId == optView:
+                    nextViewId = trajectoryId
+                    nextFrameIds = list(map(int, trajectoryId.split('|')[1].split('%')))
+            else:
+                nextViewId = f"{videoId}_output_frame_{turnFrameIds[0]:04d}.png"
+                nextFrameIds = [turnFrameIds[0]]
+            
+            nav = [1] * len(nextFrameIds)
+            nextViewIndex = list(range(len(nextFrameIds)))
+            all_video_entries.setdefault(videoId, {}).setdefault(trajectoryId, {}).setdefault(curViewId, {'nextViewId': nextViewId, 
+                                                'curFrameId': curFrameId,
+                                                'nextViewIndex': nextViewIndex,
+                                                'nextFrameIds': nextFrameIds,
+                                                'nav': nav,
+                                                'trajectoryId': trajectoryId, 
+                                                'colmapId': colmapId})
+            positions[curViewId] = np.array([cached_vid_sim[colmapId][curFrameId]['pos'][0],
+                                            cached_vid_sim[colmapId][curFrameId]['pos'][1],
+                                            cached_vid_sim[colmapId][curFrameId]['pos'][2]])
+            G.add_edge(curViewId, nextViewId, weight=distance(cached_vid_sim[colmapId][curFrameId], 
+                                                              cached_vid_sim[colmapId][nextFrameIds[0]]))
+            # G.add_edge(nextViewId, curViewId, weight=distance(cached_vid_sim[colmapId][curFrameId], 
+            #                                                   cached_vid_sim[colmapId][nextFrameIds[0]]))
+        nx.set_node_attributes(G, values=positions, name='position')
+        graphs[trajectoryId] = G
+
     return graphs
 
 
@@ -341,19 +502,21 @@ def convert_elevation(x):
 
 
 class EnvBatch(object):
-    def __init__(self, connectivity_dir, feat_db=None, batch_size=1):
+    def __init__(self, connectivity_dir, feat_db=None, anno_file=None, batch_size=1):
         self.feat_db = feat_db
         self.image_w = 640
         self.image_h = 480
         self.vfov = 60
         self.sims = []
         for i in range(batch_size):
-            sim = construct_fake_simulator(connectivity_dir)
+            # print("Creating fake simulator")
+            sim = construct_fake_simulator(connectivity_dir, anno_file)
             self.sims.append(sim)
 
-    def newEpisodes(self, scanIds, viewpointIds, headings):
-        for i, (scanId, viewpointId, heading) in enumerate(zip(scanIds, viewpointIds, headings)):
-            self.sims[i].newEpisode([scanId], [viewpointId], [heading], [0])
+    def newEpisodes(self, scanIds, viewpointIds, trajectoryIds, headings):
+        for i, (scanId, viewpointId, trajectoryId, heading) in enumerate(zip(scanIds, viewpointIds, trajectoryIds, headings)):
+            # print("Creating new episodes")
+            self.sims[i].newEpisode([scanId], [viewpointId], [trajectoryId], [heading], [0])
 
     def getStates(self):
         """
@@ -369,7 +532,7 @@ class EnvBatch(object):
             if self.feat_db is None:
                 feature = None
             else:
-                feature = self.feat_db.get_image_feature(state.videoId, state.location.frameId)
+                feature = self.feat_db.get_image_feature(state.nextViewId)
             # features = [feature]
             # features.append(self.feat_db.get_image_feature(loc.videoId, location.frameId) for loc in [state.nextFrame] + state.irrelevantFrames)
             # features = torch.stack(features, 0)

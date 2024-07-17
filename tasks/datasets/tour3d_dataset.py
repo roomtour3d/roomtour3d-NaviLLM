@@ -13,15 +13,36 @@ import networkx as nx
 import json
 try:
     from .room3d_envs import (
-        EnvBatch, angle_feature,
+        EnvBatch, angle_feature, get_angle_feature_nextviews,
         get_all_point_angle_feature, load_nav_graphs, construct_fake_simulator, VideoSim
     )
 except:
     from tasks.datasets.room3d_envs import (
-        EnvBatch, angle_feature,
+        EnvBatch, angle_feature, get_angle_feature_nextviews,
         get_all_point_angle_feature, load_nav_graphs, construct_fake_simulator, VideoSim
     )
 
+def angular_difference_rad(yaw1, yaw2):
+    # Calculate raw difference
+    difference = yaw2 - yaw1
+    # Adjust for circular nature of angles
+    difference = (difference + math.pi) % (2 * math.pi) - math.pi
+    # Handle the case when the difference is -pi radians
+    if difference == -math.pi:
+        return math.pi
+    else:
+        return difference
+
+def pitch_difference(pitch1, pitch2):
+    # Calculate raw difference in radians
+    difference = pitch2 - pitch1
+    # Optionally, adjust for wrapping if you anticipate pitch exceeding ±π/2 (±90 degrees)
+    # This is not typically necessary for pitch but included for completeness
+    if difference > math.pi:
+        difference -= 2 * math.pi
+    elif difference < -math.pi:
+        difference += 2 * math.pi
+    return difference
 
 def get_anno_file_path(data_dir, dataset_path, filename):
     if dataset_path.startswith('/'):
@@ -47,6 +68,7 @@ class Tour3DDataset(BaseDataset):
         self.training = training
         self.debug = args.debug
         self.source = source
+        self.env_cache = None
 
         if self.training:
             self.split = "train"
@@ -67,10 +89,12 @@ class Tour3DDataset(BaseDataset):
 
         # load mp3d dataset
         msg = self._load_data(config, args.data_dir)
+        self.anno_file = get_anno_file_path(args.data_dir, config.Tour3D.DIR, config.Tour3D.SPLIT[self.split])
+        
         self.buffered_state_dict = {}
 
         # simulator
-        self.sim = VideoSim('/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/object_progression_clip_gpt4_trajectory_wroom_p1/')
+        self.sim = VideoSim('/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/geoinformation_colmap_built_video_sim_all_plain_next_view_only_p1/', self.anno_file)
 
         # angle features
         # self.angle_feature = get_all_point_angle_feature(self.sim, self.angle_feat_size, self.connectivity_dir)
@@ -80,8 +104,8 @@ class Tour3DDataset(BaseDataset):
         else:
             self.angle_feature = angle_feature(0., 0., self.angle_feat_size)
 
-        # navigation graph
-        # no graph currently avaiable for web videos
+        # # navigation graph
+        # # no graph currently avaiable for web videos
         # self._load_nav_graphs()
 
         if logger is not None:
@@ -108,7 +132,7 @@ class Tour3DDataset(BaseDataset):
         sample_index = 0
 
         for i, item in enumerate(data):
-            if len(item['path']) < 3:
+            if len(item['path']) < 4:
                 continue
             # Split multiple instructions into separate entries
             for j, instr in enumerate(item['instructions']):
@@ -116,6 +140,20 @@ class Tour3DDataset(BaseDataset):
                 new_item['raw_idx'] = i
                 new_item['sample_idx'] = sample_index
                 new_item['instr_id'] = 'tour3d_{}_{}'.format(item['path_id'], j)
+                # if new_item['instr_id'] != "tour3d_Y_ptwvEyFqo_008_0": continue
+                # if new_item['instr_id'] not in ["tour3d_Y_ptwvEyFqo_008_0",
+                #                                 "tour3d__y996uiZhqE_012_0",
+                #                                 "tour3d_akPYUvc3los_005_0",
+                #                                 "tour3d_B7wyU5lJq5A_021_0",
+                #                                 "tour3d_gdR9XMX53MQ_002_0",
+                #                                 "tour3d_5o7GoPt5PD0_001_0",
+                #                                 "tour3d_628-8zR_f2E_001_0",
+                #                                 "tour3d_VCA3D6B42ag_031_0"]: 
+                #     continue
+                new_item['optView'] = item['optView']
+                new_item['trajectoryId'] = item['longId']
+
+                if item['optView'] == item['path'][0]: continue
 
                 new_item['instruction'] = instr
                 del new_item['instructions']
@@ -137,6 +175,7 @@ class Tour3DDataset(BaseDataset):
                     del new_item['chunk_view']
 
                 new_item['data_type'] = 'tour3d'
+                # new_item['path'] = new_item['path'][:-1]
                 new_data.append(new_item)
                 sample_index += 1
 
@@ -171,23 +210,25 @@ class Tour3DDataset(BaseDataset):
 
         return msg
 
-    # def _load_nav_graphs(self):
-    #     """
-    #     load graph from self.scan,
-    #     Store the graph {scan_id: graph} in self.graphs
-    #     Store the shortest path {scan_id: {view_id_x: {view_id_y: [path]} } } in self.paths
-    #     Store the distances in self.distances. (Structure see above)
-    #     Load connectivity graph for each scan, useful for reasoning about shortest paths
-    #     :return: None
-    #     """
-    #     # print('Loading navigation graphs for %d scans' % len(self.scans))
-    #     self.graphs = load_nav_graphs(self.connectivity_dir, self.scans)
-    #     self.shortest_paths = {}
-    #     for scan, G in self.graphs.items():  # compute all shortest paths
-    #         self.shortest_paths[scan] = dict(nx.all_pairs_dijkstra_path(G))
-    #     self.shortest_distances = {}
-    #     for scan, G in self.graphs.items():  # compute all shortest paths
-    #         self.shortest_distances[scan] = dict(nx.all_pairs_dijkstra_path_length(G))
+    def _load_nav_graphs(self):
+        """
+        load graph from self.scan,
+        Store the graph {scan_id: graph} in self.graphs
+        Store the shortest path {scan_id: {view_id_x: {view_id_y: [path]} } } in self.paths
+        Store the distances in self.distances. (Structure see above)
+        Load connectivity graph for each scan, useful for reasoning about shortest paths
+        :return: None
+        """
+        # print('Loading navigation graphs for %d scans' % len(self.scans))
+        self.graphs = load_nav_graphs(self.anno_file)
+        self.shortest_paths = {}
+        for scan, G in self.graphs.items():  # compute all shortest paths
+            self.shortest_paths[scan] = dict(nx.all_pairs_dijkstra_path(G))
+            # print(scan, dict(nx.all_pairs_dijkstra_path(G)))
+        self.shortest_distances = {}
+        for scan, G in self.graphs.items():  # compute all shortest paths
+            self.shortest_distances[scan] = dict(nx.all_pairs_dijkstra_path_length(G))
+            # print(scan, dict(nx.all_pairs_dijkstra_path_length(G)))
 
     def __len__(self):
         return len(self.alldata)
@@ -202,9 +243,14 @@ class Tour3DDataset(BaseDataset):
         scanIds = [scan]
         viewpointIds = [item['path'][0]]
         headings = [item['heading']]
+        trajectory_ids = [item['trajectoryId']]
 
-        env = EnvBatch(connectivity_dir='/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/object_progression_clip_gpt4_trajectory_wroom_p1/', batch_size=1)
-        env.newEpisodes(scanIds, viewpointIds, headings)
+        # if self.env_cache is None:
+        env = EnvBatch(connectivity_dir='/mnt/bn/kinetics-lp-maliva-v6/data/ytb_vln/geoinformation_colmap_built_video_sim_all_plain_next_view_only_p1/', batch_size=1, anno_file=self.anno_file)
+            # self.env_cache = copy.deepcopy(env)
+        # else:
+        #     env = copy.deepcopy(self.env_cache)
+        env.newEpisodes(scanIds, viewpointIds, trajectory_ids, headings)
         observations = self.get_obs(items=[item], env=env, data_type=data_type)[0]
 
         data_dict = {
@@ -253,32 +299,41 @@ class Tour3DDataset(BaseDataset):
             base_view_id = state.viewIndex
 
             if feature is None:
-                feature = self.feat_db.get_image_feature(state.videoId, state.location.frameId)
+                # feature = self.feat_db.get_image_feature(state.videoId, state.location.frameId)
+                feature = self.feat_db.get_image_feature(state.nextViewId)
 
-            features = [feature]
-            angle_feats = [self.angle_feature]
-            for loc in state.get_neighbours():
-                features += [self.feat_db.get_image_feature(loc.videoId, loc.frameId)]
-                #TODO: get the angle feats for each neigh frame
-                angle_feats += [angle_feature(0., 0., self.angle_feat_size)]
             # Full features
-            candidate = self.make_candidate(features, state.videoId, state.location.frameId, state.viewIndex)
+            candidate = self.make_candidate(feature, 
+                                            state.videoId, 
+                                            state.location.frameId,
+                                            state.trajectoryId,
+                                            state.nextViewId,
+                                            state.heading,
+                                            state.elevation)
+
+            # features = [feature]
+            angle_feats = get_angle_feature_nextviews(state, self.angle_feat_size)
+            # for loc in state.get_neighbours():
+            #     features += [self.feat_db.get_image_feature(loc.videoId, loc.frameId)]
+            #     #TODO: get the angle feats for each neigh frame
+            #     angle_feats += [angle_feature(0., 0., self.angle_feat_size)]
             
             # #TODO: get features for the candidate frames, maybe precalculate the angle to the current frames
             # angle_features = get_angle_features()
-            features = [np.concatenate((feature, afeature), -1) for feature, afeature in zip(features, angle_feats)]
-            # cand_features = [cand['feature'] for cand in candidate]
-            # features.extend(cand_features)
-            features = np.stack(features, 0)
-            # # [visual_feature, angle_feature] for views
-            # feature = candidate['feature']
+            features = np.concatenate((feature, angle_feats), -1)
+            # # cand_features = [cand['feature'] for cand in candidate]
+            # # features.extend(cand_features)
+            # features = np.stack(features, 0)
+            # # # [visual_feature, angle_feature] for views
+            # # feature = candidate['feature']
 
             ob = {
                 'instr_id': item['instr_id'],
                 'videoId': state.videoId,
                 'scan': state.videoId,
-                'viewpoint': state.location.frameId,
-                'viewpointId': f"{state.videoId}%{state.location.frameId}",
+                'colmapId': state.videoId,
+                'viewpoint': f"{state.videoId}_output_frame_{state.location.frameId:04d}.png",
+                'viewpointId': state.longId,
                 'viewIndex': state.viewIndex,
                 'position': (state.location.x, state.location.y, state.location.z),
                 'heading': state.heading,
@@ -289,7 +344,9 @@ class Tour3DDataset(BaseDataset):
                 'instruction': item['instruction'],
                 # 'instr_encoding': item['instr_encoding'],
                 'gt_path': item['path'],
+                'trajectoryId': state.trajectoryId,
                 'path_id': item['path_id'],
+                'opt_flag': [view==item['optView'] for view in item['path']]
             }
             if 'fg_instruction' in item:
                 ob.update({
@@ -310,20 +367,23 @@ class Tour3DDataset(BaseDataset):
             obs.append(ob)
         return obs
 
-    def make_candidate(self, feature, videoId, frameId, viewId):
+    def make_candidate(self, feature, videoId, cframeId, trajectoryId, nviewId, base_heading, base_elevation):
         def _loc_distance(loc):
             return np.sqrt(loc.rel_heading ** 2 + loc.rel_elevation ** 2)
-        base_heading = 0
-        base_elevation = 0
+        # base_heading = 0
+        # base_elevation = 0
 
         adj_dict = {}
-        long_id = "%s_%s" % (videoId, frameId)
+        # long_id = "%s_%s" % (videoId, frameId)
+        long_id = nviewId
 
+        #TODO Judge whether current longId view is available
         if long_id not in self.buffered_state_dict:
-            self.sim.newEpisode([videoId], [frameId], [0], [0])
+            cviewId = f"{videoId}_output_frame_{cframeId:04d}.png"
+            self.sim.newEpisode([videoId], [cviewId], [trajectoryId], [base_heading], [base_elevation])
             state = self.sim.getState()[0]
 
-            for ix in range(1+len(state.get_neighbours())):
+            for ix in range(len(state.get_neighbours())):
                 # ix = 0
                 if ix != 0:
                     self.sim.getNextObs(1)
@@ -331,15 +391,19 @@ class Tour3DDataset(BaseDataset):
                 assert state.viewIndex == ix
                 # Heading and elevation for the viewpoint center
                 heading = state.heading - base_heading
+                # heading = angular_difference_rad(math.radians(state.heading%360), math.radians(base_heading%360))
                 elevation = state.elevation - base_elevation
-
+                # elevation = pitch_difference(math.radians(state.elevation), math.radians(base_elevation))
                 if state.current_nav_type_to_base_view == 0:
                     continue
                 visual_feat = feature[ix]
                 # for j, loc in enumerate(state.neighbours):
                 for j, loc in enumerate(state.get_navigable_neighbours()):
                     # Heading and elevation for the viewpoint center
-                    distance = state.distance(loc)
+                    distance = _loc_distance(loc)
+                    frameId = loc.frameId
+                    #! Note this may be different to the longId used for feature extraction
+                    longvidFrameId = f"{videoId}_output_frame_{frameId:04d}.png"
 
                     loc_heading = heading + loc.rel_heading
                     loc_elevation = elevation + loc.rel_elevation
@@ -349,15 +413,15 @@ class Tour3DDataset(BaseDataset):
                     else:
                         angle_feat = angle_feature(loc_heading, loc_elevation, self.angle_feat_size)
 
-                    if (loc.longFrameId not in adj_dict or
-                            distance < adj_dict[loc.longFrameId]['distance']):
-                        adj_dict[loc.longFrameId] = {
+                    if (longvidFrameId not in adj_dict or
+                            distance < adj_dict[longvidFrameId]['distance']):
+                        adj_dict[longvidFrameId] = {
                             'heading': loc_heading,
                             'elevation': loc_elevation,
                             "normalized_heading": state.heading + loc.rel_heading,
                             "normalized_elevation": state.elevation + loc.rel_elevation,
                             'scanId': videoId,
-                            'viewpointId': loc.longFrameId,  # Next viewpoint id
+                            'viewpointId': longvidFrameId,  # Next viewpoint id
                             'pointId': ix,
                             'distance': distance,
                             'idx': j + 1,

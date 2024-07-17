@@ -41,6 +41,8 @@ class RoomTourAgent(LLaVAAgent):
             return self.get_room_object_trajectory_spatial_aug_prompt(*args, **kwargs)
         elif task == 'video_desc_roomloc':
             return self.get_room_location_trajectory_prompt(*args, **kwargs)
+        elif task == 'video_desc_roomobj_target':
+            return self.get_room_location_target_trajectory_prompt(*args, **kwargs)
         else:
             raise NotImplementedError(task)
 
@@ -48,6 +50,16 @@ class RoomTourAgent(LLaVAAgent):
         obs_text = ' '.join(["({}) <cand>".format(i) for i in range(cand_num)])
         prompt = "Please describe the path of the camera movement takes by identifying the rooms that are visited in order.\n" + \
             "The following is the Observation, which includes multiple frames from an egocentric camera touring a house. Please list the rooms visited in each observased image.\n" + \
+            "### Observation: {} \n".format(obs_text) + \
+            "### Question: {}\n".format(ques) + \
+            "### Answer: "
+        return prompt
+
+    def get_room_location_target_trajectory_prompt(self, ques, cand_num):
+        obs_text = ' '.join(["({}) <cand>".format(i) for i in range(cand_num)])
+        # prompt = "Please describe the path of the camera movement takes by identifying the visiting target, and the planned path for the purpose.\n" + \
+        prompt = "Generate the task you need to complete based on the current given observations.\n" + \
+            "The following is the Observation, which includes multiple frames from an egocentric camera touring a house. \n" + \
             "### Observation: {} \n".format(obs_text) + \
             "### Question: {}\n".format(ques) + \
             "### Answer: "

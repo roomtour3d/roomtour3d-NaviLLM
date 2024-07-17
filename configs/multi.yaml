@@ -9,6 +9,7 @@ Feature:
     "mp3d": "eva_features/mp3d_EVA02-CLIP-L-14-336.hdf5"
     "scan_qa": "eva_features/scanqa_EVA02-CLIP-L-14-336.hdf5"
     "room_tour": "eva_features/web_obj_prog_p1_EVA02-CLIP-L-14-336.hdf5.bak"
+    "room3d_tour": "eva_features/web_3d_obj_prog_crop_p1_EVA02-CLIP-L-14-336.hdf5"
     "coco": "eva_features/coco_EVA02-CLIP-L-14-336.hdf5"
 
   # object
@@ -65,6 +66,11 @@ Dataset:
     SPLIT: {
       "train": "p1_train_reformat.json"
     }
+  Tour3D:
+    DIR: "RoomTour"
+    SPLIT: {
+      "train": "p1_train_colmap_trajectory_tour3d.json"
+    }
   EQA:
     DIR: "EQA_MP3D"
     SPLIT: {
@@ -91,8 +97,8 @@ Dataset:
 
 # training
 Pretrain:
-  SOURCE: ['R2R_AUG', 'REVERIE_AUG', 'R2R', 'REVERIE', 'SOON', 'CVDN', 'ScanQA']
-  Ratio: [20, 2, 1, 1, 1, 1, 1]
+  SOURCE: ['Tour3D', 'RoomTour', 'ScanQA', 'LLaVA']
+  Ratio: [10, 20, 5, 2]
   LOSS_COEF: {
     "R2R_AUG": 1,
     "REVERIE_AUG": 1
@@ -100,11 +106,10 @@ Pretrain:
 
 
 Multi:
-  SOURCE: ['R2R', 'REVERIE', 'CVDN','SOON', 'ScanQA', 'LLaVA']
-  Ratio: [20, 5, 1, 5, 5, 5]
+  SOURCE: ['Tour3D', 'R2R', 'REVERIE', 'CVDN','SOON', 'ScanQA', 'LLaVA']
+  Ratio: [10, 20, 5, 1, 5, 5, 5]
   LOSS_COEF: {
   }
-
 
 Model:
   num_l_layers: 9
@@ -125,6 +130,7 @@ Optim:
   }
   train_max_action_len: {
     "R2R": 15,
+    "Tour3D": 15,
     "REVERIE": 15,
     "CVDN": 15,
     "SOON": 15,
