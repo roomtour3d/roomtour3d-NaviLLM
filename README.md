@@ -1,106 +1,74 @@
-# Towards Learning a Generalist Model for Embodied Navigation
+# RoomTour3D: A Geometry-Aware Video-Instruction Dataset for Embodied Navigation
 
 
 <div align="center" margin-bottom="3em">
-    <a href="https://arxiv.org/abs/2312.02010" target="_blank">
-    <img src="https://img.shields.io/badge/Paper-arXiv-green" alt="Paper arXiv"></a>
+    <!-- <a href="https://arxiv.org/abs/2312.02010" target="_blank">
+    <img src="https://img.shields.io/badge/Paper-arXiv-green" alt="Paper arXiv"></a> -->
     <a href="https://opensource.org/licenses/MIT" target="_blank">
     <img src="https://img.shields.io/badge/pytorch-%3E=1.10-red?logo=pytorch" alt="Pytorch"></a>
-    <a href="https://mycuhk-my.sharepoint.com/:f:/g/personal/1155204980_link_cuhk_edu_hk/EvgqBlhxMEtBjUm1VkBBqZsBq7QnZ97l-Y9PdS58cqsomQ?e=azuiDc" target="_blank">
-    <img src="https://img.shields.io/badge/Data-NaviLLM-orange" alt="Data"></a>
-    <a href="https://huggingface.co/zd11024/NaviLLM" target="_blank">
-    <img src="https://img.shields.io/badge/Model-NaviLLM-blue" alt="Model"></a>
-    <a href="https://opensource.org/licenses/MIT" target="_blank">
-    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"></a>
+    <a href="https://huggingface.co/datasets/roomtour3d/roomtour3d" target="_blank">
+    <img src="https://img.shields.io/badge/Data-RoomTour3D-orange" alt="Data"></a>
+    <a href="https://huggingface.co/datasets/roomtour3d/room_tour_video_3fps" target="_blank">
+    <img src="https://img.shields.io/badge/Data-RoomTour3D-green" alt="Frames"></a>
+    <a href="https://huggingface.co/roomtour3d/roomtour3d-navillm-models" target="_blank">
+    <img src="https://img.shields.io/badge/Model-RoomTour3D-blue" alt="Model"></a>
+    <!-- <a href="https://opensource.org/licenses/MIT" target="_blank">
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"></a> -->
 
 </div>
 &nbsp
 
 <div align="center" margin-bottom="3em">
-<a target="_blank" href="https://github.com/zd11024">Duo Zheng<sup>1,2*</sup></a>,
-<a target="_blank" href="https://sega-hsj.github.io/">Shijia Huang<sup>1*</sup></a>, 
-<a target="_blank" href="https://github.com/MuMuJun97">Lin Zhao<sup>3</sup></a>, 
-<a target="_blank" href="https://pages.cs.wisc.edu/~yiwuzhong/">Yiwu Zhong<sup>1</sup></a> and 
-<a target="_blank" href="https://lwwangcse.github.io/">Liwei Wang<sup>1&ddagger;</sup></a>
+<a target="_blank" href="https://mingfei.info">Mingfei Han<sup>1,3</sup></a>,
+Liang Ma<sup>1</sup>, 
+Kamila Zhumakhanova<sup>1</sup>, 
+Ekaterina Radionova<sup>1</sup>, 
+Jingyi Zhang<sup>2</sup>,
+<a target="_blank" href="https://www.xiaojun.ai/">Xiaojun Chang<sup>1,4</sup></a>,
+<a target="_blank" href="https://scholar.google.com/citations?user=voxznZAAAAAJ">Xiaodan Liang<sup>1,2</sup></a>,
+<a target="_blank" href="https://www.di.ens.fr/~laptev/">Ivan Laptev<sup>1</sup></a>,
 
 <sup>*</sup>Equal contribution.
-<sup>&ddagger;</sup> Corresponding author.
+<!-- <sup>&ddagger;</sup> Corresponding author. -->
 
 <strong>
-<sup>1</sup>The Chinese University of Hong Kong<br>
-<sup>2</sup>Shanghai AI Laboratory<br>
-<sup>3</sup>Centre for Perceptual and Interactive Intelligence<br>
+<sup>1</sup>Department of Computer Vision, MBZUAI<br>
+<sup>2</sup>Shenzhen Campus of Sun Yat-Sen University<br>
+<sup>3</sup>ReLER Lab, AAII, UTS<br>
+<sup>4</sup>University of Science and Technology of China<br>
 </strong>
 </div>
 &nbsp;
 
-Building a generalist agent that can interact with the world is an ultimate goal for humans, thus spurring the research for embodied navigation, where an agent is required to navigate according to instructions or respond to queries. Despite the major progress attained, previous works primarily focus on task-specific agents and lack generalizability to unseen scenarios. Recently, LLMs have presented remarkable capabilities across various fields, and provided a promising opportunity for embodied navigation. Drawing on this, we propose the first generalist model for embodied navigation, *NaviLLM*. It adapts LLMs to embodied navigation by introducing schema-based instruction. The schema-based instruction flexibly casts various tasks into generation problems, thereby unifying a wide range of tasks. This approach allows us to integrate diverse data sources from various datasets into the training, equipping *NaviLLM* with a wide range of capabilities required by embodied navigation. We conduct extensive experiments to evaluate the performance and generalizability of our model. The experimental results demonstrate that our unified model achieves state-of-the-art performance on CVDN, SOON, and ScanQA. Specifically, it surpasses the previous stats-of-the-art method by a significant margin of **29%** in goal progress on CVDN. Moreover, our model also demonstrates strong generalizability and presents impressive results on unseen tasks, e.g., embodied question answering and 3D captioning.
+
+<p align="center">
+    <img src="assets/pipeline.png" width="95%"><br>
+</p>
+
+Vision-and-Language Navigation (VLN) field suffers from limited diversity in training data, primarily constrained by artificially curated simulators. To address this, we introduce RoomTour3D, a video-instruction dataset derived from web-based room tour videos that capture real-world indoor spaces and human walking demonstrations.
+
+Unlike existing VLN datasets that rely on manual curations and structured navigational cues, RoomTour3D leverages these videos to generate open-ended human walking trajectories and open-world navigable instructions. We developed an automatic pipeline that integrates reconstructed 3D scenes, depth, and open-vocabulary objects, enhancing geometry-aware and open-world capabilities.
+
+The dataset includes ∼100K open-ended trajectories with ∼200K instructions, 2K geometric trajectories from 1847 room tour environments, and intermediate products like 3D scenes and object tags, all now available for release. Our experiments demonstrate RoomTour3D’s potential in training robust embodied navigation agents, enhancing performances across multiple VLN tasks like CVDN, SOON, R2R, and REVERIE, with improvements exceeding 6%, achieving an outstanding 9.8% boost on SOON and setting new state-of-the-art results. Moreover, RoomTour3D facilitates the development of trainable zero-shot VLN agent, showcasing the potential and challenges of advancing towards open-world navigation.
 
 <div align="center" margin-bottom="3em">
-
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/towards-learning-a-generalist-model-for/visual-navigation-on-cooperative-vision-and-1)](https://paperswithcode.com/sota/visual-navigation-on-cooperative-vision-and-1?p=towards-learning-a-generalist-model-for)
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/towards-learning-a-generalist-model-for/visual-navigation-on-room-to-room-1)](https://paperswithcode.com/sota/visual-navigation-on-room-to-room-1?p=towards-learning-a-generalist-model-for)
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/towards-learning-a-generalist-model-for/3d-question-answering-3d-qa-on-scanqa-test-w)](https://paperswithcode.com/sota/3d-question-answering-3d-qa-on-scanqa-test-w?p=towards-learning-a-generalist-model-for)
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/towards-learning-a-generalist-model-for/visual-navigation-on-soon-test)](https://paperswithcode.com/sota/visual-navigation-on-soon-test?p=towards-learning-a-generalist-model-for)
 
 </div>
 
 <!-- This repository contains the codes for our paper "Towards Learning a Generalist Model for Embodied Navigation". -->
 
-## Updates
-- Feb 24, our paper is accepted to CVPR 2024.
-- Dec 13, we release the model checkpoints at this [link](https://huggingface.co/zd11024/NaviLLM).
-- Dec 6, the processed data and features can be found [here](https://mycuhk-my.sharepoint.com/:f:/g/personal/1155204980_link_cuhk_edu_hk/EvgqBlhxMEtBjUm1VkBBqZsBq7QnZ97l-Y9PdS58cqsomQ?e=azuiDc).
-- Dec 5, our paper is released.
-- Nov 28, we make our code public.
+## Quick view
+- The responding frames are released at [here](https://huggingface.co/datasets/roomtour3d/room_tour_video_3fps).
+- Annotations and intermediate products (3D reconstruction, depth, tags) are released at [here](https://huggingface.co/datasets/roomtour3d/roomtour3d).
+- Pretrained models and finetuned models are released at [here](https://huggingface.co/roomtour3d/roomtour3d-navillm-models).
 
-## Features
-- Support multiple VLN tasks (CVDN, SOON, R2R, and REVERIE), 3D QA (ScanQA) and LLaVA instruction tuning in a multi-task framework.
-- Allow addinng new tasks by customizing the dataset and agent class.
-- Enable to design prompts for tasks flexibly.
+## Quick Start
+- Our code is built upon [NaviLLM](https://github.com/zd11024/NaviLLM). Please follow the [instructions](https://github.com/zd11024/NaviLLM?tab=readme-ov-file#installation) to prepare the environment.
+- Please extract features of RoomTour video frames or directly download the features from [here](https://huggingface.co/datasets/roomtour3d/roomtour3d/tree/main/eva_features).
 
-
-## Method
-<p align="center">
-    <img src="assets/model.jpg" width="95%"><br>
-</p>
-
-We propose schema-based instruction and design a series of schemas (e.g., descriptions of tasks, visual observation, and navigation history), based on the characteristics of embodied tasks. Benefitting from this design, we are able to train a unified model on the data collected for diverse tasks, thereby enabling our model to address a wide spectrum of tasks, ranging from vision-language navigation and object localization, to 3D question answering, trajectory summarization, embodied question answering.
-
-## Experiments
-<p align="center">
-    <img src="assets/overall_results.jpg" width="95%"><br>
-</p>
-
-
-With only a single model, NaviLLM has achieved new state-of-the-art results simultaneously on multiple benchmarks, i.e.
-CVDN, SOON, and ScanQA, and demonstrated
-comparable performance to latest models on R2R and
-REVERIE.
-Additionally, it also won the first place on [CVDN leaderboard](https://eval.ai/web/challenges/challenge-page/463/leaderboard/1292) and the second place on [ScanQA leaderboard](https://eval.ai/web/challenges/challenge-page/1715/leaderboard/4107).
-
-## Installation
-1. Install the [MatterPort 3D simulator](https://github.com/peteanderson80/Matterport3DSimulator). Please add the simulator path to yout python path.
-```
-export PYTHONPATH=Matterport3DSimulator/build:$PYTHONPATH
-```
-
-2. Set up the Java Development Kit (JDK), if you want to enable METEOR while evaluating ScanQA. Otherwise, please comment out the related code. 
-```
-export JAVA_HOME=$jdk_path
-export PATH=$JAVA_HOME/bin:$PATH
-export CLASSPATH=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
-```
-
-3. Create the conda environment and install the requirements.
-```
-conda create --name navillm python=3.8.16
-conda activate navillm
-pip install -r requirements.txt
-```
 
 ## Data Processing
-The data directory is structed as follows. Please download the processed data and features from [One Drive](https://mycuhk-my.sharepoint.com/:f:/g/personal/1155204980_link_cuhk_edu_hk/EvgqBlhxMEtBjUm1VkBBqZsBq7QnZ97l-Y9PdS58cqsomQ?e=azuiDc).
+The data directory is structed as follows. We follow NaviLLM to process the data and cached the features. Please download the [processed data](https://huggingface.co/datasets/roomtour3d/roomtour3d/tree/main/trajectories) and [features](https://huggingface.co/datasets/roomtour3d/roomtour3d/tree/main/eva_features). Additionally, please download the processed data and features of MP3D and LLaVA from [One Drive](https://mycuhk-my.sharepoint.com/:f:/g/personal/1155204980_link_cuhk_edu_hk/EvgqBlhxMEtBjUm1VkBBqZsBq7QnZ97l-Y9PdS58cqsomQ?e=azuiDc).
 
 
 ```
@@ -112,72 +80,58 @@ data
 ├── R2R
 ├── REVERIE
 ├── EQA
+├── RoomTour *
+│   ├── geo_trajectory.pkl
+│   ├── p1_train_reformat.json
+│   ├── p1_train_colmap_trajectory_tour3d.json
 ├── eva_features
 │   ├── mp3d_EVA02-CLIP-L-14-336.hdf5
 │   ├── scanqa_EVA02-CLIP-L-14-336.hdf5
 │   └── coco_EVA02-CLIP-L-14-336.hdf5
+|   └── web_obj_prog_p1_EVA02-CLIP-L-14-336.hdf5 *
+|   └── web_3d_obj_prog_crop_p1_EVA02-CLIP-L-14-336.hdf5 *
 ├── obj_features
 │   ├── reverie_obj_feat
 │   └── soon_obj_feat
 ├── models
     └── Vicuna-7B
 ```
-
-**1. Orinal Datasets**
-* R2R & REVERIE & SOON: we use the annotation provided by [DUET](https://github.com/cshizhe/VLN-DUET).
-* CVDN: The annotation could be downloaded from [the official repository](https://github.com/mmurray/cvdn).
-* ScanQA: Please download the annotation and frames extracted from ScanNet at [here](https://github.com/ATR-DBI/ScanQA/blob/main/docs/dataset.md).
-* LLaVA: [LLaVA-detail-23k](https://huggingface.co/datasets/liuhaotian/LLaVA-Instruct-150K) is used for insturction following.
-* Augmented Data from R2R and REVERIE: We utilize the augmented data generated by [DUET](https://github.com/cshizhe/VLN-DUET).
+\* indicates the difference to the baseline (NaviLLM) data organization structure.
 
 
-**2. Image Features**
+<!-- **1. Image Features**
 
-The image features are extracted with [EVA-CLIP-02-Large (428M)](https://github.com/baaivision/EVA). And we also provide scripts used for extracting features from MP3D, ScanQA, COCO at [scripts/data_tools](scripts/data_tools). To use EVA-CLIP-02, please install the corresponding environment following the instruction of th original reposity.
+The image features are extracted with [EVA-CLIP-02-Large (428M)](https://github.com/baaivision/EVA). To use EVA-CLIP-02, please install the corresponding environment following the instruction of th original reposity.
 ```
 cd scripts/data_tools
-sh extract_features_mp3d.sh         # for Matterport3D
-#   sh extract_features_scanqa.sh   # for ScanQA
-#   sh extract_features_coco.sh     # for COCO
-```
-
-**3. Object Features**
-
-We leverage the object features extracted from ViT-B16 by [HM3DAutoVLN](https://github.com/cshizhe/HM3DAutoVLN),  and put the processed features of REVERIE and SOON at data/obj_features. You could either disable the object features by removing the flag `--enable_og`.
+sh extract_features_web.sh         # for RoomTour3D -->
 
 
-**4. Models**
+**Models**
 
-The LLM is built upon [Vicuna-7B-v0](https://huggingface.co/lmsys/vicuna-7b-delta-v0/tree/main). Please download the pre-trained model and put it at data/models.
+To fully reproduce our results, please prepare the Vicuna model from FastChat Github repo [here](https://github.com/lm-sys/FastChat/tree/v0.1.10?tab=readme-ov-file#vicuna-7b). Please prepare the pre-trained model and put it at data/models.
+
+**Configs**
+
+- [configs/pretrain.yaml](configs/pretrain.yaml) Pretrain model with conjuction of RoomTour3D video-instruction data and simulator data. 
+- [configs/multi.yaml](configs/multi.yaml) Finetune model with conjuction of RoomTour3D video-action-instruction data and simulator data. 
+- [configs/multi_wo_room.yaml](configs/multi_wo_room.yaml) Finetune model with simulator data. 
+
+<!-- **Code** -->
 
 
 ## Model Checkpoints
-We release the model checkpoints and corresponding training logs as follows.
+We release the model checkpoints as follows.
 
-<table border="1" width="100%">
-    <tr align="center">
-        <th></th><th>Log</th><th>Cost</th><th>CVDN</th><th colspan="2">SOON</th><th colspan="2">R2R</th><th colspan="2">REVERIE</th><th colspan="2">ScanQA</th>
-    </tr>
-        <tr align="center">
-        <td></td><td></td><td>Time (day)</td><td>GP</td><td>SR</td><td>SPL</td><td>SR</td><td>SPL</td><td>SR</td><td>SPL</td><td>EM</td><td>Rouge-L</td>
-    </tr>
-        </tr>
-        <tr align="center">
-        <td><a href="https://huggingface.co/zd11024/NaviLLM">model_without_pretrain</a></td><td><a href="assets/model_without_pretrain.log">here</a></td><td>~1.5</td><td>5.91</td><td>35.44</td><td>28.09</td><td><b>67</b></td><td>58</td><td><b>44.56</b></td><td><b>36.63</b></td><td><b>23.3</b></td><td><b>38.2</b></td>
-    </tr>
-    </tr>
-        </tr>
-        <tr align="center">
-        <td><a href="https://huggingface.co/zd11024/NaviLLM">model_with_pretrain</a></td><td><a href="assets/model_with_pretrain.log">here</a></td><td>~3</td><td><b>6.16</b></td><td><b>38.33</b></td><td><b>29.24</b></td><td><b>67</b></td><td><b>59</b></td><td>42.15</td><td>35.68</td><td>22.1</td><td>37.6</td>
-    </tr>
-</table>
-<br></br>
+- video-instruction finetuned: [hugginface](https://huggingface.co/roomtour3d/roomtour3d-navillm-models/blob/main/navillm_roomtour3d_video_instruction_finetune.pt) The model is finetuned using exactly same data to baseline, on our pretrained model (video-instruction pretrained) with the RoomTour3D data.
+- video-action-instruction finetuned: [hugginface](https://huggingface.co/roomtour3d/roomtour3d-navillm-models/resolve/main/navillm_roomtour3d_video_action_instruction.pt) The model is resumed from video-instruction model with additional video-action-instruction data.
+- video-instruction pretrained: [hugginface](https://huggingface.co/roomtour3d/roomtour3d-navillm-models/blob/main/navillm_roomtour3d_video_instruction_pretrain.pt) The model is pretrained with same recipe to the baseline model, except introducing our newly RoomTour3D video-instruction data.
 
-Previous works have consistently shown notable improvements after pre-training on augmented data from 2R and REVERIE. However, in our experiment, we find only a slight enhancement on R2R, CVDN, and SOON after pre-training. We speculate that the quality of the data may play a more crucial role than its quantity for our method.
+Simply involving our newly introduced cheap and automatic data, the baseline can achieve performance boost on all the benchmarks, such as R2R, CVDN and SOON, without additional training cost introduced. We argue that this show the effectiveness and quality of our introduced data.
 
 
 
-## Training & Inference
+<!-- ## Training & Inference
 **1. Pretraining**:
 The model is trained for 10,000 steps in the pretraining stage with a batch size of 64. In the pre-training stage, we perform teacher forcing training on the combined dataset from CVDN, SOON, R2R, REVERIE, ScanQA, and augmented data from R2R and REVERIE.
 ```
@@ -202,21 +156,9 @@ sh scripts/multi_wo_pretrain.sh
 During the testing phase, we employ a sampling strategy with a temperature of 0.01 for action generation in the SOON and REVERIE tasks, to encourage more exploration. For other tasks, we opt for a greedy strategy in generating actions.
 ```bash
 sh scripts/evaluation/eval_cvdn.sh  # eval_soon.sh/eval_r2r.sh/eval_reverie.sh/eval_scanqa.sh
-```
+``` -->
 
 ## Acknowledgements
-We would like to thank MatterPort 3D for their contributions to the open-sourced platform and community.
-Additionally, this work benefits from [DUET](https://github.com/cshizhe/VLN-DUET), [HM3DAutoVLN](https://github.com/cshizhe/HM3DAutoVLN), and [VLN-SIG](https://github.com/jialuli-luka/VLN-SIG). Thanks for their awesome works!
+We would like to thank MatterPort 3D for their contributions to the open-sourced platform and community. This work also benifit from [NaviLLM](https://github.com/zd11024/NaviLLM) for the released code base.Thanks for their awesome works!
 
-## Citation
-If you find our *NaviLLM* useful for your research, please consider giving this repository a star and citing our paper as follows:
-```
-@misc{zheng2023learning,
-      title={Towards Learning a Generalist Model for Embodied Navigation}, 
-      author={Duo Zheng and Shijia Huang and Lin Zhao and Yiwu Zhong and Liwei Wang},
-      year={2023},
-      eprint={2312.02010},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV}
-}
-```
+
