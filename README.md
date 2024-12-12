@@ -41,7 +41,7 @@ Jingyi Zhang<sup>2</sup>,
 
 
 <p align="center">
-    <img src="assets/pipeline.png" width="95%"><br>
+    <img src="assets/data_generation_pipeline.png" width="95%"><br>
 </p>
 
 Vision-and-Language Navigation (VLN) field suffers from limited diversity in training data, primarily constrained by artificially curated simulators. To address this, we introduce RoomTour3D, a video-instruction dataset derived from web-based room tour videos that capture real-world indoor spaces and human walking demonstrations.
