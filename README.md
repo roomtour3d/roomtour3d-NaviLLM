@@ -1,9 +1,9 @@
-# RoomTour3D: A Geometry-Aware Video-Instruction Dataset for Embodied Navigation
+# RoomTour3D: Geometry-Aware Video-Instruction Tuning for Embodied Navigation
 
 
 <div align="center" margin-bottom="3em">
-    <!-- <a href="https://arxiv.org/abs/2312.02010" target="_blank">
-    <img src="https://img.shields.io/badge/Paper-arXiv-green" alt="Paper arXiv"></a> -->
+    <a href="http://arxiv.org/abs/2412.08591" target="_blank">
+    <img src="https://img.shields.io/badge/Paper-arXiv-green" alt="Paper arXiv"></a>
     <a href="https://opensource.org/licenses/MIT" target="_blank">
     <img src="https://img.shields.io/badge/pytorch-%3E=1.10-red?logo=pytorch" alt="Pytorch"></a>
     <a href="https://huggingface.co/datasets/roomtour3d/roomtour3d" target="_blank">
@@ -28,7 +28,6 @@ Jingyi Zhang<sup>2</sup>,
 <a target="_blank" href="https://scholar.google.com/citations?user=voxznZAAAAAJ">Xiaodan Liang<sup>1,2</sup></a>,
 <a target="_blank" href="https://www.di.ens.fr/~laptev/">Ivan Laptev<sup>1</sup></a>,
 
-<sup>*</sup>Equal contribution.
 <!-- <sup>&ddagger;</sup> Corresponding author. -->
 
 <strong>
@@ -157,6 +156,21 @@ During the testing phase, we employ a sampling strategy with a temperature of 0.
 ```bash
 sh scripts/evaluation/eval_cvdn.sh  # eval_soon.sh/eval_r2r.sh/eval_reverie.sh/eval_scanqa.sh
 ``` -->
+
+
+## Citation <a name="citation"></a>
+
+If you find this repo useful for your research, please consider citing the paper
+```
+@article{han2024roomtour3d,
+      title={RoomTour3D: Geometry-Aware Video-Instruction Tuning for Embodied Navigation}, 
+      author={Mingfei Han and Liang Ma and Kamila Zhumakhanova and Ekaterina Radionova and Jingyi Zhang and Xiaojun Chang and Xiaodan Liang and Ivan Laptev},
+      journal={arXiv preprint arXiv:2412.08591},
+      year={2023}
+}
+```
+
+<!-- ## Acknowledgements <a name="acknowledgements"></a> -->
 
 ## Acknowledgements
 We would like to thank MatterPort 3D for their contributions to the open-sourced platform and community. This work also benifit from [NaviLLM](https://github.com/zd11024/NaviLLM) for the released code base.Thanks for their awesome works!
