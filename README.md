@@ -9,7 +9,7 @@
     <a href="https://huggingface.co/datasets/roomtour3d/roomtour3d" target="_blank">
     <img src="https://img.shields.io/badge/Data-RoomTour3D-orange" alt="Data"></a>
     <a href="https://huggingface.co/datasets/roomtour3d/room_tour_video_3fps" target="_blank">
-    <img src="https://img.shields.io/badge/Data-RoomTour3D-green" alt="Frames"></a>
+    <img src="https://img.shields.io/badge/Frames-RoomTour3D-green" alt="Frames"></a>
     <a href="https://huggingface.co/roomtour3d/roomtour3d-navillm-models" target="_blank">
     <img src="https://img.shields.io/badge/Model-RoomTour3D-blue" alt="Model"></a>
     <!-- <a href="https://opensource.org/licenses/MIT" target="_blank">
