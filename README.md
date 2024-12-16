@@ -30,6 +30,8 @@ Jingyi Zhang<sup>2</sup>,
 
 <!-- <sup>&ddagger;</sup> Corresponding author. -->
 
+&nbsp;
+
 <strong>
 <sup>1</sup>Department of Computer Vision, MBZUAI<br>
 <sup>2</sup>Shenzhen Campus of Sun Yat-Sen University<br>
