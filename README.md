@@ -25,7 +25,7 @@ Kamila Zhumakhanova<sup>1</sup>,
 Ekaterina Radionova<sup>1</sup>, 
 Jingyi Zhang<sup>2</sup>,
 <a target="_blank" href="https://www.xiaojun.ai/">Xiaojun Chang<sup>1,4</sup></a>,
-<a target="_blank" href="https://scholar.google.com/citations?user=voxznZAAAAAJ">Xiaodan Liang<sup>1,2</sup></a>,
+<a target="_blank" href="https://scholar.google.com/citations?user=voxznZAAAAAJ">Xiaodan Liang<sup>1</sup></a>,
 <a target="_blank" href="https://www.di.ens.fr/~laptev/">Ivan Laptev<sup>1</sup></a>,
 
 <!-- <sup>&ddagger;</sup> Corresponding author. -->
