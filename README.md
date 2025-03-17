@@ -1,4 +1,4 @@
-# RoomTour3D: Geometry-Aware Video-Instruction Tuning for Embodied Navigation
+# RoomTour3D: Geometry-Aware Video-Instruction Tuning for Embodied Navigation - CVPR 2025
 
 
 <div align="center" margin-bottom="3em">
